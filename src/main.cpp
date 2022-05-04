@@ -4,30 +4,69 @@
 #include <uos/pin2.hpp>
 #include <uos/scheduler.hpp>
 
+#include "old_spi.hpp"
+
 unsigned char stack2[1024];
 void *sp2 = &stack2[1024];
 void *sp1;
 
+tm1628a<tm1628a_ucb0> *seg_driver;
+
 void main1() {
-    while (true) {
-        for (int x = 0; x < 20; x++) {
-            P3OUT = P3OUT ^ BIT0;
-            //uos::scheduler.unblock(1);
-            //uos::scheduler.suspend_me();
-            //__delay_cycles(100000);
-            //uos::scheduler.unblock(1);
-            uos::timer.sleep(60000);
+
+    tm1628a<tm1628a_ucb0> segment_driver;
+    seg_driver = &segment_driver;
+
+    segment_driver.display_mode(display_mode_t::bits_6_segments_11);
+    segment_driver.prepare_write();
+    segment_driver.display_control(pulse_width_t::_14_of_16, true);
+
+    unsigned char data[14]; // write data to display register, auto increment
+    for (unsigned i = 0; i < 13; i += 2) {
+        data[i] = 0xff;
+        data[i + 1] = 0xff;
+    }
+
+    segment_driver.write(0, data, 14);
+
+    max6675_uca0 temp;
+
+    int ctr = 0;
+
+    while (1) {
+        auto t = temp.read();
+
+        auto nachkomma = (((t >> 3) & 0x03) * 25 + 5) / 10;
+
+        auto result = print_display((t >> 5) * 10 + nachkomma, 0);
+
+        if (!print_display(result + ((t & 0x7) << 1), 1)) {
+            ctr = -100;
         }
+        ctr += 1;
+        P3OUT = P3OUT ^ BIT0;
+        uos::timer.sleep(60000);
     }
 }
 
 void main2() {
-    P2IFG = 0; // prevent starting interrupt
+    while (!seg_driver) {
+        // TODO replace sleep with yield
+        uos::timer.sleep(1000);
+    }
+
+    pulse_width_t brightness = pulse_width_t::_14_of_16;
+
     P2IES = 0b111; // toggle on falling edge (btn pushed down)
+
+    seg_driver->display_control(brightness, true);
     while (true) {
+        P2IFG = 0; // only listen from now for keychanges (debounce)
         uos::pin2.wait_for_change(0b111);
+        brightness++;
+        seg_driver->display_control(brightness, true);
         P3OUT = P3OUT | BIT2;
-        uos::timer.sleep(60000);
+        uos::timer.sleep(20000);
         P3OUT = P3OUT & ~BIT2;
     }
 }
