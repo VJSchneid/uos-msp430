@@ -6,8 +6,10 @@
 
 #include "old_spi.hpp"
 
-unsigned char stack2[1024];
-void *sp2 = &stack2[1024];
+unsigned char stack2[512];
+unsigned char stack3[512];
+void *sp2 = &stack2[512];
+void *sp3 = &stack3[512];
 void *sp1;
 
 tm1628a<tm1628a_ucb0> *seg_driver;
@@ -66,8 +68,32 @@ void main2() {
         brightness++;
         seg_driver->display_control(brightness, true);
         P3OUT = P3OUT | BIT2;
-        uos::timer.sleep(20000);
+        uos::timer.sleep(5000);
         P3OUT = P3OUT & ~BIT2;
+    }
+}
+
+void main3() {
+    while(!seg_driver) {
+        uos::timer.sleep(1000);
+    }
+
+    unsigned char leds = 1;
+    bool forwards = true;
+    while(true) {
+        if (forwards) {
+            leds <<= 1;
+        } else {
+            leds >>= 1;
+        }
+        if (leds == 0x40 && forwards || leds == 1 && !forwards) {
+            forwards = !forwards;
+        }
+
+        seg_driver->write(3, (leds >> 0) & 0b11 | (((leds >> 0) & 0b100) << 1));
+        seg_driver->write(5, (leds >> 3) & 0b1);
+        seg_driver->write(1, (leds >> 4) & 0b11 | (((leds >> 4) & 0b100) << 1));
+        uos::timer.sleep(15000);
     }
 }
 
@@ -84,6 +110,7 @@ int main() {
     PM5CTL0 = PM5CTL0 & ~LOCKLPM5;
 
     uos::scheduler.add_task(1, sp2, main2);
+    uos::scheduler.add_task(2, sp3, main3);
     //thread_init(&sp2, &main2);
     //thread_switch(sp2, &sp1);
 
