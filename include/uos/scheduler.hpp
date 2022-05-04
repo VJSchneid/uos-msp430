@@ -29,7 +29,7 @@ template <unsigned NrTasks> struct scheduler_t {
 
     void suspend_me() noexcept {
         int my_tasknr = active_task_;
-        tasks_[my_tasknr].blocked = 1;
+        tasks_[my_tasknr].blocked = tasks_[my_tasknr].blocked + 1;
         while (true) {
             for (int i = 0; i < NrTasks; i++) {
                 if (tasks_[i].sp != nullptr && tasks_[i].blocked <= 0) {

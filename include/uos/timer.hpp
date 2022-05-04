@@ -9,10 +9,12 @@ namespace uos {
 struct timer_t {
 
     struct waiting_task {
-        unsigned nr;
-        unsigned ticks;
-        unsigned from_timepoint;
-        waiting_task *volatile next = nullptr;
+        // all fields that are accessed by ISR must
+        // be marked volatile to prevent invalid content
+        volatile unsigned nr;
+        volatile unsigned ticks;
+        volatile unsigned from_timepoint;
+        waiting_task * volatile next = nullptr;
     };
 
     void sleep(unsigned ticks) noexcept;

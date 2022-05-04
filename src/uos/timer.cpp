@@ -137,7 +137,7 @@ void timer_t::atomic_insert(waiting_task &t) noexcept {
 void timer_t::atomic_remove(waiting_task &t) noexcept {
     waiting_task *task;
     waiting_task *volatile *prev_task_next = &waiting_tasks_;
-    for (task = timer.waiting_tasks_; task != nullptr; task = task->next) {
+    for (task = waiting_tasks_; task != nullptr; task = task->next) {
         if (task == &t) {
             *prev_task_next = t.next;
             return;
@@ -206,6 +206,8 @@ void __attribute__((interrupt(TIMER0_A0_VECTOR))) timer_a0_isr() {
     //TA0CCTL0 = TA0CCTL0 & ~CCIFG;
 
     //TA0CTL = TA0CTL | MC__CONTINUOUS; // start timer
+
+    // wakeup scheduler
     __bic_SR_register_on_exit(LPM0_bits);
 }
 

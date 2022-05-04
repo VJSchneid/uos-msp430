@@ -1,6 +1,7 @@
 #include <msp430.h>
 
 #include <uos/timer.hpp>
+#include <uos/pin2.hpp>
 #include <uos/scheduler.hpp>
 
 unsigned char stack2[1024];
@@ -21,13 +22,12 @@ void main1() {
 }
 
 void main2() {
+    P2IES = 0b111; // toggle on falling edge (btn pushed down)
     while (true) {
-        //uos::scheduler.suspend_me();
-        P3OUT = P3OUT ^ BIT2;
-        //uos::timer.sleep(10000);
-        //thread_switch(sp1, &sp2);
-        //uos::scheduler.suspend_me();
+        uos::pin2.wait_for_change(0b111);
+        P3OUT = P3OUT | BIT2;
         uos::timer.sleep(60000);
+        P3OUT = P3OUT & ~BIT2;
     }
 }
 

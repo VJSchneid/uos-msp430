@@ -3,6 +3,7 @@ add_library(uos OBJECT
   thread.cpp
   thread.s
   timer.cpp
+  pin2.cpp
 )
 
 target_link_libraries(uos PUBLIC config)
