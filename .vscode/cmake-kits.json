@@ -1,0 +1,6 @@
+[
+  {
+    "name": "msp430",
+    "toolchainFile": "../msp430.cmake"
+  }
+]
