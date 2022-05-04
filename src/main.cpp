@@ -22,6 +22,7 @@ void main1() {
 }
 
 void main2() {
+    P2IFG = 0; // prevent starting interrupt
     P2IES = 0b111; // toggle on falling edge (btn pushed down)
     while (true) {
         uos::pin2.wait_for_change(0b111);
