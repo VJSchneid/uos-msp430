@@ -25,6 +25,11 @@ template <unsigned NrTasks> struct scheduler_t {
 
     unsigned taskid() noexcept { return active_task_; }
 
+    void init() {
+        // first task is suspended without having a registered stack pointer
+        tasks_[0].sp = this; // assign just a valid address
+    }
+
     bool is_blocked(unsigned tasknr) { return tasks_[tasknr].blocked > 0; }
 
     void suspend_me() noexcept {

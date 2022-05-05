@@ -3,6 +3,7 @@
 #include <uos/timer.hpp>
 #include <uos/pin2.hpp>
 #include <uos/scheduler.hpp>
+#include <uos/uca1.hpp>
 
 #include "old_spi.hpp"
 
@@ -25,15 +26,18 @@ void main1() {
 
     unsigned char data[14]; // write data to display register, auto increment
     for (unsigned i = 0; i < 13; i += 2) {
-        data[i] = 0xff;
-        data[i + 1] = 0xff;
+        data[i] = 0x00;
+        data[i + 1] = 0x00;
     }
 
     segment_driver.write(0, data, 14);
 
     max6675_uca0 temp;
 
-    int ctr = 0;
+    //uos::timer.sleep(5000); // wait a little bit for clock to become stable
+    /*uos::uca1.transmit("Starting Reflow Controller...\r\n");
+    uos::uca1.transmit("Version: " GIT_VERSION "\r\n");
+    uos::uca1.transmit("Build Date: " __DATE__ " " __TIME__ "\r\n");*/
 
     while (1) {
         auto t = temp.read();
@@ -42,10 +46,7 @@ void main1() {
 
         auto result = print_display((t >> 5) * 10 + nachkomma, 0);
 
-        if (!print_display(result + ((t & 0x7) << 1), 1)) {
-            ctr = -100;
-        }
-        ctr += 1;
+        print_display(result + ((t & 0x7) << 1), 1);
         P3OUT = P3OUT ^ BIT0;
         uos::timer.sleep(60000);
     }
@@ -65,6 +66,7 @@ void main2() {
     while (true) {
         P2IFG = 0; // only listen from now for keychanges (debounce)
         uos::pin2.wait_for_change(0b111);
+        uos::uca1.transmit("Button was pressed!\r\n");
         brightness++;
         seg_driver->display_control(brightness, true);
         P3OUT = P3OUT | BIT2;
@@ -81,6 +83,11 @@ void main3() {
     unsigned char leds = 1;
     bool forwards = true;
     while(true) {
+        seg_driver->write(3, (leds >> 0) & 0b11 | (((leds >> 0) & 0b100) << 1));
+        seg_driver->write(5, (leds >> 3) & 0b1);
+        seg_driver->write(1, (leds >> 4) & 0b11 | (((leds >> 4) & 0b100) << 1));
+        uos::timer.sleep(15000);
+
         if (forwards) {
             leds <<= 1;
         } else {
@@ -89,11 +96,6 @@ void main3() {
         if (leds == 0x40 && forwards || leds == 1 && !forwards) {
             forwards = !forwards;
         }
-
-        seg_driver->write(3, (leds >> 0) & 0b11 | (((leds >> 0) & 0b100) << 1));
-        seg_driver->write(5, (leds >> 3) & 0b1);
-        seg_driver->write(1, (leds >> 4) & 0b11 | (((leds >> 4) & 0b100) << 1));
-        uos::timer.sleep(15000);
     }
 }
 
@@ -105,14 +107,28 @@ int main() {
     P3OUT = P3OUT & ~(BIT0 | BIT2); // Clear P1.0 output latch
     P3DIR = P3DIR | BIT0 | BIT2;    // For LED
 
+    P2SEL0 = BIT5 | BIT6; // UCA1TXD + UCA1RXD
+
+    // Configure USCI1 for UART 19200 BAUD Transmission
+    UCA1CTLW0 = UCSWRST;
+    UCA1CTLW0 = UCA1CTLW0 | UCSSEL__SMCLK;
+    UCA1IFG = 0; // reset all interrupt flags
+    // baudrate = 19200
+    UCA1BRW = 3; 
+    UCA1MCTLW_H = 0x2;
+    UCA1MCTLW_L = UCOS16 | (4 << 4);
+    // enable USCI1
+    UCA1CTLW0 = UCA1CTLW0 & ~UCSWRST;
+
+
     // Disable the GPIO power-on default high-impedance mode to activate
     // previously configured port settings
     PM5CTL0 = PM5CTL0 & ~LOCKLPM5;
 
+    uos::scheduler.init();
+
     uos::scheduler.add_task(1, sp2, main2);
     uos::scheduler.add_task(2, sp3, main3);
-    //thread_init(&sp2, &main2);
-    //thread_switch(sp2, &sp1);
 
     main1();
     // panic from here
