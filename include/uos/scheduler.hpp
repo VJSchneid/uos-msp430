@@ -3,16 +3,17 @@
 #include <uos/thread.hpp>
 
 #include <msp430.h>
+#include <uos/device/msp430/scheduler.hpp>
 #include <cstdint>
 
 namespace uos {
 
-struct task_t {
-    int blocked = 0;
-    void* sp = nullptr;
-};
+template <unsigned NrTasks, typename MCULayer> struct scheduler_t : MCULayer {
+    struct task_t {
+        int blocked = 0;
+        void* sp = nullptr;
+    };
 
-template <unsigned NrTasks> struct scheduler_t {
 
     void unblock(unsigned tasknr) noexcept {
         // IMPORTANT: This has to be atomic
@@ -41,18 +42,18 @@ template <unsigned NrTasks> struct scheduler_t {
                     if (i != active_task_) {
                         active_task_ = i;
                         // TODO this should be protected? (interrupt disable?)
-                        thread_switch(&tasks_[i].sp, &tasks_[my_tasknr].sp);
+                        MCULayer::thread_switch(&tasks_[i].sp, &tasks_[my_tasknr].sp);
                     }
                     return;
                 }
             }
-            __bis_SR_register(LPM0_bits);
+            MCULayer::sleep_until_interrupt();
         }
     }
 
     bool add_task(unsigned nr, void *sp, void (*initial_function)()) noexcept {
         if (nr == 0 || nr >= NrTasks || tasks_[nr].sp != nullptr) return false;
-        thread_init(&sp, initial_function);
+        MCULayer::thread_init(&sp, initial_function);
         tasks_[nr].sp = sp;
         return true;
     }
@@ -61,6 +62,6 @@ template <unsigned NrTasks> struct scheduler_t {
     volatile unsigned active_task_ = 0;
 };
 
-extern scheduler_t<3> scheduler;
+extern scheduler_t<3, dev::msp430::scheduler> scheduler;
 
 } // namespace uos
