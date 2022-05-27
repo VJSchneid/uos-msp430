@@ -13,7 +13,7 @@
       "miDebuggerPath": "msp430-elf-gdb",
       "miDebuggerServerAddress": "localhost:4444",
 
-      // Tell VSCode to run openocd as debug server in background
+      // Tell VSCode to run mspdebug as debug server in background
       "debugServerPath": "mspdebug",
       "debugServerArgs": "tilib \"prog ${command:cmake.launchTargetPath}\" \"gdb 4444\"",
       "serverStarted": "Bound to port 4444. Now waiting for connection...", // Startup string to look for
