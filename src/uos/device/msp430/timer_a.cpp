@@ -20,6 +20,7 @@ timer_a_base::task_t *timer_a_base::find_next_ready_task(task_list<task_data> &t
     return next_task;
 }
 
+#ifdef UOS_DEV_MSP430_ENABLE_TIMERA0
 void __attribute__((interrupt(TIMER0_A0_VECTOR))) timer_a0_layer::isr() {
     for (auto &task : timer_a0::waiting_tasks_) {
         if (current_time() - task.from_timepoint >= task.ticks) {
@@ -45,5 +46,6 @@ void __attribute__((interrupt(TIMER0_A0_VECTOR))) timer_a0_layer::isr() {
     // wakeup scheduler
     __bic_SR_register_on_exit(LPM0_bits);
 }
+#endif
 
 } // namespace uos

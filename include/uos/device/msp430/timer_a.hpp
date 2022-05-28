@@ -97,6 +97,7 @@ private:
 template<typename HWLayer>
 task_list<timer_a_base::task_data> timer_a<HWLayer>::waiting_tasks_;
 
+#ifdef UOS_DEV_MSP430_ENABLE_TIMERA0
 struct timer_a0_layer {
     static inline unsigned wakeup_time() noexcept {
         return TA0CCR0;
@@ -127,5 +128,6 @@ struct timer_a0_layer {
 };
 
 using timer_a0 = timer_a<timer_a0_layer>;
+#endif
 
 }
