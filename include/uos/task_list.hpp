@@ -11,8 +11,6 @@ struct task_list {
         task_t * volatile next;
     };
 
-    // TODO create iterators
-
     // TODO variadic argument to create TaskData
     task_t create() {
         task_t my_task;
@@ -39,6 +37,38 @@ struct task_list {
 
     bool empty() noexcept {
         return waiting_tasks_ == nullptr;
+    }
+
+    struct iterator {
+        void operator++() noexcept {
+            task_ = task_->next;
+        }
+
+        task_t *operator->() noexcept {
+            return task_;
+        }
+
+        task_t &operator*() noexcept {
+            return *task_;
+        }
+
+        bool operator==(iterator const &rhs) const noexcept {
+            return task_ == rhs.task_;
+        }
+
+        bool operator!=(iterator const &rhs) const noexcept {
+            return !(*this == rhs);
+        }
+
+        task_t *volatile task_;
+    };
+
+    iterator begin() noexcept {
+        return {waiting_tasks_};
+    }
+
+    iterator end() noexcept {
+        return {nullptr};
     }
 
     task_t * volatile waiting_tasks_ = nullptr;

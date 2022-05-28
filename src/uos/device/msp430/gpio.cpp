@@ -8,11 +8,11 @@ void __attribute__((interrupt(PORT1_VECTOR))) port1_layer::isr() {
     P1IFG = 0;
 
     unsigned char next_mask = 0;
-    for (auto task = port1::waiting_tasks_; task != nullptr; task = task->next) {
-        if (ifgs & task->mask) {
-            scheduler::unblock(task->nr);
+    for (auto &task : port1::waiting_tasks_) {
+        if (ifgs & task.mask) {
+            scheduler::unblock(task.nr);
         } else {
-            next_mask |= task->mask;
+            next_mask |= task.mask;
         }
     }
 
@@ -29,11 +29,11 @@ void __attribute__((interrupt(PORT2_VECTOR))) port2_layer::isr() {
     P2IFG = 0;
 
     unsigned char next_mask = 0;
-    for (auto task = port2::waiting_tasks_.waiting_tasks_; task != nullptr; task = task->next) {
-        if (ifgs & task->mask) {
-            scheduler::unblock(task->nr);
+    for (auto &task : port2::waiting_tasks_) {
+        if (ifgs & task.mask) {
+            scheduler::unblock(task.nr);
         } else {
-            next_mask |= task->mask;
+            next_mask |= task.mask;
         }
     }
 

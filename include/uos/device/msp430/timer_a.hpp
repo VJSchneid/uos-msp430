@@ -79,24 +79,16 @@ struct timer_a : timer_a_base {
         
     }
 
-    // TODO: maybe add to base class? (as find_next_ready_task)
-    static bool is_someone_waiting() noexcept {
-        for (auto task = waiting_tasks_.waiting_tasks_; task != nullptr; task = task->next) {
-            if (scheduler::is_blocked(task->nr)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-
 private:
     friend HWLayer;
 
     static void check_stop() noexcept {
-        if (!is_someone_waiting()) {
-            HWLayer::stop_timer(); // work is done: stop timer
+        for (auto &task : waiting_tasks_) {
+            if (scheduler::is_blocked(task.nr)) {
+                return;
+            }
         }
+        HWLayer::stop_timer(); // work is done: stop timer
     }
 
     static task_list<task_data> waiting_tasks_;
