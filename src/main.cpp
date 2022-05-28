@@ -4,7 +4,6 @@
 #include <uos/device/msp430/gpio.hpp>
 #include <uos/scheduler.hpp>
 #include <uos/uca1.hpp>
-#include <uos/device/msp430/port2.hpp>
 
 #include "old_spi.hpp"
 

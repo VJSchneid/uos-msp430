@@ -9,7 +9,7 @@ add_library(config INTERFACE)
 
 target_compile_features(config INTERFACE cxx_std_20)
 target_compile_options(config INTERFACE "-g")
-target_compile_definitions(config INTERFACE UOS_DEV_MSP430_ENABLE_PORT2)
+target_compile_definitions(config INTERFACE UOS_DEV_MSP430_ENABLE_PORT2 UOS_NUMBER_OF_TASKS=3)
 
 target_include_directories(config INTERFACE "include/")
 
