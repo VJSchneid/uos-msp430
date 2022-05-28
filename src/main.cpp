@@ -2,9 +2,7 @@
 
 #include <uos/device/msp430/timer_a.hpp>
 #include <uos/device/msp430/gpio.hpp>
-#include <uos/scheduler.hpp>
-#include <uos/uca1.hpp>
-#include <uos/device/msp430/timer_a.hpp>
+#include <uos/device/msp430/eusci.hpp>
 
 #include "old_spi.hpp"
 
@@ -70,7 +68,7 @@ void main2() {
     while (true) {
         P2IFG = 0; // only listen from now for keychanges (debounce)
         uos::dev::msp430::port2::wait_for_change(0b111);
-        uos::uca1.transmit("Button was pressed!\r\n");
+        uos::dev::msp430::eusci_a1::transmit("Button was pressed!\r\n");
         brightness++;
         seg_driver->display_control(brightness, true);
         P3OUT = P3OUT | BIT2;
