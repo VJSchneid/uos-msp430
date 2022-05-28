@@ -1,7 +1,6 @@
 #include <uos/uca1.hpp>
 
-#include <uos/scheduler.hpp>
-#include <msp430.h>
+#include <uos/device/msp430/scheduler.hpp>
 
 namespace uos {
 
@@ -11,10 +10,10 @@ uca1_t uca1;
 void uca1_t::transmit(const char *data, unsigned length) {
     // TODO power save and maybe reset with UCSWRST?
     if (length == 0) return;
-    scheduler.prepare_block();
+    scheduler::prepare_block();
 
     waiting_task my_task;
-    my_task.nr = scheduler.taskid();
+    my_task.nr = scheduler::taskid();
     my_task.data = data;
     my_task.length = length;
 
@@ -30,7 +29,7 @@ void uca1_t::transmit(const char *data, unsigned length) {
     }
     UCA1IE = UCA1IE | UCTXCPTIFG; // enable TX interrupts
 
-    scheduler.suspend_me();
+    scheduler::suspend_me();
 
     remove_from_list(my_task);
 }
@@ -84,7 +83,7 @@ void __attribute__((interrupt(USCI_A1_VECTOR))) uca1_isr() {
         task->data = task->data + 1;
         task->length = task->length - 1;
         if (task->length == 0) {
-            scheduler.unblock(task->nr);
+            scheduler::unblock(task->nr);
             // wakeup scheduler
             __bic_SR_register_on_exit(LPM0_bits);
         }

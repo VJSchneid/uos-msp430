@@ -1,9 +1,10 @@
 #include <msp430.h>
 
 #include <uos/timer.hpp>
-#include <uos/pin2.hpp>
+#include <uos/device/msp430/gpio.hpp>
 #include <uos/scheduler.hpp>
 #include <uos/uca1.hpp>
+#include <uos/device/msp430/port2.hpp>
 
 #include "old_spi.hpp"
 
@@ -52,6 +53,7 @@ void main1() {
     }
 }
 
+
 void main2() {
     while (!seg_driver) {
         // TODO replace sleep with yield
@@ -65,7 +67,7 @@ void main2() {
     seg_driver->display_control(brightness, true);
     while (true) {
         P2IFG = 0; // only listen from now for keychanges (debounce)
-        uos::pin2.wait_for_change(0b111);
+        uos::dev::msp430::port2::wait_for_change(0b111);
         uos::uca1.transmit("Button was pressed!\r\n");
         brightness++;
         seg_driver->display_control(brightness, true);
@@ -125,10 +127,10 @@ int main() {
     // previously configured port settings
     PM5CTL0 = PM5CTL0 & ~LOCKLPM5;
 
-    uos::scheduler.init();
+    uos::scheduler::init();
 
-    uos::scheduler.add_task(1, sp2, main2);
-    uos::scheduler.add_task(2, sp3, main3);
+    uos::scheduler::add_task(1, sp2, main2);
+    uos::scheduler::add_task(2, sp3, main3);
 
     main1();
     // panic from here

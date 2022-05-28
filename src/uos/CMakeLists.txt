@@ -1,7 +1,5 @@
 add_library(uos OBJECT
-  scheduler.cpp
   timer.cpp
-  pin2.cpp
   uca1.cpp
 )
 

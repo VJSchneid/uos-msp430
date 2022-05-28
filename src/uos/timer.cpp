@@ -2,6 +2,8 @@
 
 #include <msp430.h>
 
+#include <uos/device/msp430/scheduler.hpp>
+
 namespace uos {
 
 timer_t timer;
@@ -37,12 +39,12 @@ void timer_t::sleep(unsigned ticks) noexcept {
     if (ticks <= 0) return;
 
     // prepare block (i.e. reset block ctr to zero)
-    scheduler.prepare_block();
+    scheduler::prepare_block();
 
     bool block = true;
 
     waiting_task my_task;
-    my_task.nr = scheduler.taskid();
+    my_task.nr = scheduler::taskid();
     my_task.ticks = ticks; 
 
     // after setting from_timepoint we have to make sure that
@@ -86,7 +88,7 @@ void timer_t::sleep(unsigned ticks) noexcept {
     TA0CTL = TASSEL__SMCLK | ID__8 | MC__CONTINUOUS;
 
     if (block) {
-        scheduler.suspend_me();
+        scheduler::suspend_me();
     }
 
     atomic_remove(my_task);
@@ -95,7 +97,7 @@ void timer_t::sleep(unsigned ticks) noexcept {
 
 bool timer_t::is_someone_waiting() noexcept {
     for (auto task = waiting_tasks_; task != nullptr; task = task->next) {
-        if (scheduler.is_blocked(task->nr)) {
+        if (scheduler::is_blocked(task->nr)) {
             return true;
         }
     }
@@ -183,7 +185,7 @@ void timer_t::check_stop() noexcept {
 void __attribute__((interrupt(TIMER0_A0_VECTOR))) timer_a0_isr() {
     for (auto task = timer.waiting_tasks_; task != nullptr; task = task->next) {
         if (TA0R - task->from_timepoint >= task->ticks) {
-            scheduler.unblock(task->nr);
+            scheduler::unblock(task->nr);
         }
     }
 
@@ -198,7 +200,7 @@ void __attribute__((interrupt(TIMER0_A0_VECTOR))) timer_a0_isr() {
         }
 
         // we might missed interrupt: try next TA0CCR0 and unblock manually
-        scheduler.unblock(next_task->nr);
+        scheduler::unblock(next_task->nr);
         //TA0CCTL0 = TA0CCTL0 & ~CCIFG;
     }
 
