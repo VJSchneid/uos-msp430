@@ -29,7 +29,7 @@ void __attribute__((interrupt(PORT2_VECTOR))) port2_layer::isr() {
     P2IFG = 0;
 
     unsigned char next_mask = 0;
-    for (auto task = port2::waiting_tasks_; task != nullptr; task = task->next) {
+    for (auto task = port2::waiting_tasks_.waiting_tasks_; task != nullptr; task = task->next) {
         if (ifgs & task->mask) {
             scheduler::unblock(task->nr);
         } else {

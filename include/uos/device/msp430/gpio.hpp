@@ -1,5 +1,6 @@
 #pragma once
 
+#include <uos/device/msp430/task_list.hpp>
 #include <uos/device/msp430/scheduler.hpp>
 
 #include <msp430.h>
@@ -9,12 +10,10 @@ namespace uos::dev::msp430 {
 struct gpio_base {
     using mask_t = unsigned char;
 
-    struct waiting_task {
+    struct task_data {
         // all fields that are accessed by ISR must
         // be marked volatile to prevent invalid content
-        volatile unsigned nr;
         volatile mask_t mask;
-        waiting_task * volatile next;
     };
 };
 
@@ -24,39 +23,24 @@ struct gpio : gpio_base {
         if (!mask) return;
         scheduler::prepare_block();
 
-        waiting_task my_task;
-        my_task.nr = scheduler::taskid();
+        auto my_task = waiting_tasks_.create();
         my_task.mask = mask;
-
-        my_task.next = waiting_tasks_;
-        waiting_tasks_ = &my_task;
+        waiting_tasks_.prepend(my_task);
 
         // set interrupt enable with bitmask
         PortLayer::enable_interrupt(mask);
 
-        remove_from_list(my_task);
+        waiting_tasks_.remove(my_task);
     }
-
-    static waiting_task * volatile waiting_tasks_;
 
 protected:
     friend PortLayer;
 
-    static void remove_from_list(waiting_task &t) {
-        waiting_task *task;
-        waiting_task *volatile *prev_task_next = &waiting_tasks_;
-        for (task = waiting_tasks_; task != nullptr; task = task->next) {
-            if (task == &t) {
-                *prev_task_next = t.next;
-                return;
-            }
-            prev_task_next = &task->next;
-        }
-    }
+    static task_list<task_data> waiting_tasks_;
 };
 
 template<typename PortLayer>
-gpio<PortLayer>::waiting_task * volatile gpio<PortLayer>::waiting_tasks_ = nullptr;
+task_list<gpio_base::task_data> gpio<PortLayer>::waiting_tasks_;
 
 #ifdef UOS_DEV_MSP430_ENABLE_PORT1
 struct port1_layer {
