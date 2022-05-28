@@ -16,7 +16,7 @@ void *sp1;
 
 tm1628a<tm1628a_ucb0> *seg_driver;
 
-using timer = uos::dev::msp430::timer;
+using timer = uos::dev::msp430::timer_a0;
 
 void main1() {
 
