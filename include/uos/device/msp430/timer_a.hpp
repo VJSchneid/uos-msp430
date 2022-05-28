@@ -20,7 +20,7 @@ struct timer_a_base {
 
 template<typename HWLayer>
 struct timer_a : timer_a_base {
-    static void __attribute__ ((noinline)) sleep(unsigned ticks) noexcept {
+    static void sleep(unsigned ticks) noexcept {
         if (ticks <= 0) return;
 
         // prepare suspend (i.e. reset block ctr to zero)
