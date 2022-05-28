@@ -1,33 +1,36 @@
-#include <uos/device/msp430/scheduler.hpp>
+#pragma once
+
+#include <uos/device/msp430/task_list.hpp>
 
 namespace uos::dev::msp430 {
 
 struct timer_base {
 
-    struct waiting_task {
+    struct task_data {
         // all fields that are accessed by ISR must
         // be marked volatile to prevent invalid content
-        volatile unsigned nr;
         volatile unsigned ticks;
         volatile unsigned from_timepoint;
-        waiting_task * volatile next = nullptr;
     };
+};
 
-    void sleep(unsigned ticks) noexcept;
+struct timer : timer_base {
+    using task_t = task_list<task_data>::task_t;
 
-    bool is_someone_waiting() noexcept;
+    static void sleep(unsigned ticks) noexcept;
 
-    waiting_task *volatile waiting_tasks_ = nullptr;
-    unsigned epoch_ = 0;
+    static bool is_someone_waiting() noexcept;
 
-    waiting_task *find_next_ready_task(unsigned current_time) noexcept;
+
 private:
+    static task_t *find_next_ready_task(unsigned current_time) noexcept;
 
-    void atomic_insert(waiting_task &t) noexcept;
-    void atomic_remove(waiting_task &t) noexcept;
+    static void check_start() noexcept;
+    static void check_stop() noexcept;
 
-    void check_start() noexcept;
-    void check_stop() noexcept;
+    void __attribute__((interrupt(TIMER0_A0_VECTOR))) isr();
+
+    static task_list<task_data> waiting_tasks_;
 };
 
 }

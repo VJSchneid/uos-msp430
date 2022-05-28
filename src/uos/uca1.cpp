@@ -10,7 +10,7 @@ uca1_t uca1;
 void uca1_t::transmit(const char *data, unsigned length) {
     // TODO power save and maybe reset with UCSWRST?
     if (length == 0) return;
-    scheduler::prepare_block();
+    scheduler::prepare_suspend();
 
     waiting_task my_task;
     my_task.nr = scheduler::taskid();

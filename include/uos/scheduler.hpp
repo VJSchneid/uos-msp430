@@ -21,7 +21,7 @@ struct basic_scheduler {
         }
     }
 
-    static void prepare_block() noexcept { tasks_[active_task_].blocked = 0; }
+    static void prepare_suspend() noexcept { tasks_[active_task_].blocked = 0; }
 
     static unsigned taskid() noexcept { return active_task_; }
 

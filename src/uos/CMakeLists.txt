@@ -1,5 +1,4 @@
 add_library(uos OBJECT
-  timer.cpp
   uca1.cpp
 )
 

@@ -21,7 +21,7 @@ template<typename PortLayer>
 struct gpio : gpio_base {
     static void wait_for_change(mask_t mask) {
         if (!mask) return;
-        scheduler::prepare_block();
+        scheduler::prepare_suspend();
 
         auto my_task = waiting_tasks_.create();
         my_task.mask = mask;

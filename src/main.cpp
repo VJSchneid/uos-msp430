@@ -1,9 +1,10 @@
 #include <msp430.h>
 
-#include <uos/timer.hpp>
+#include <uos/device/msp430/timer_a.hpp>
 #include <uos/device/msp430/gpio.hpp>
 #include <uos/scheduler.hpp>
 #include <uos/uca1.hpp>
+#include <uos/device/msp430/timer_a.hpp>
 
 #include "old_spi.hpp"
 
@@ -14,6 +15,8 @@ void *sp3 = &stack3[512];
 void *sp1;
 
 tm1628a<tm1628a_ucb0> *seg_driver;
+
+using timer = uos::dev::msp430::timer;
 
 void main1() {
 
@@ -48,7 +51,7 @@ void main1() {
 
         print_display(result + ((t & 0x7) << 1), 1);
         P3OUT = P3OUT ^ BIT0;
-        uos::timer.sleep(60000);
+        timer::sleep(60000);
     }
 }
 
@@ -56,7 +59,7 @@ void main1() {
 void main2() {
     while (!seg_driver) {
         // TODO replace sleep with yield
-        uos::timer.sleep(1000);
+        timer::sleep(1000);
     }
 
     pulse_width_t brightness = pulse_width_t::_14_of_16;
@@ -71,14 +74,14 @@ void main2() {
         brightness++;
         seg_driver->display_control(brightness, true);
         P3OUT = P3OUT | BIT2;
-        uos::timer.sleep(5000);
+        timer::sleep(5000);
         P3OUT = P3OUT & ~BIT2;
     }
 }
 
 void main3() {
     while(!seg_driver) {
-        uos::timer.sleep(1000);
+        timer::sleep(1000);
     }
 
     unsigned char leds = 1;
@@ -87,7 +90,7 @@ void main3() {
         seg_driver->write(3, (leds >> 0) & 0b11 | (((leds >> 0) & 0b100) << 1));
         seg_driver->write(5, (leds >> 3) & 0b1);
         seg_driver->write(1, (leds >> 4) & 0b11 | (((leds >> 4) & 0b100) << 1));
-        uos::timer.sleep(15000);
+        timer::sleep(15000);
 
         if (forwards) {
             leds <<= 1;
