@@ -171,8 +171,8 @@ struct tm1628a : private Interface {
   }
 };
 
-struct tm1628a_ucb0 {
-    tm1628a_ucb0() {
+struct tm1628a_ucb0_polling {
+    tm1628a_ucb0_polling() {
         P1OUT = P1OUT | BIT0;
         P1DIR = P1DIR | BIT0;
         P1SEL0 = P1SEL0 | BIT1 | BIT2 | BIT3; // SPI pins
@@ -279,7 +279,7 @@ int main(void) {
     // previously configured port settings
     PM5CTL0 = PM5CTL0 & ~LOCKLPM5;
 
-    tm1628a<tm1628a_ucb0> segment_driver;
+    tm1628a<tm1628a_ucb0_polling> segment_driver;
 
     segment_driver.display_mode(display_mode_t::bits_6_segments_11);
     segment_driver.prepare_write();

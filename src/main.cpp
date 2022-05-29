@@ -3,8 +3,7 @@
 #include <uos/device/msp430/timer_a.hpp>
 #include <uos/device/msp430/gpio.hpp>
 #include <uos/device/msp430/eusci.hpp>
-
-#include "old_spi.hpp"
+#include <uos/device/tm1628a.hpp>
 
 unsigned char stack2[512];
 unsigned char stack3[512];
@@ -12,18 +11,113 @@ void *sp2 = &stack2[512];
 void *sp3 = &stack3[512];
 void *sp1;
 
-tm1628a<tm1628a_ucb0> *seg_driver;
+#include "old_spi.hpp"
+
+struct tm1628a_chipselect {
+    static inline void init() noexcept {
+        P1OUT = P1OUT | BIT0;
+        P1DIR = P1DIR | BIT0;
+    }
+
+    static inline void select() noexcept {
+        P1OUT = P1OUT & ~BIT0; // enable device select
+    }
+
+    static inline void deselect() noexcept {
+        P1OUT = P1OUT | BIT0; // disable device select
+    }
+};
+
+struct tm1628a_ucb0_polling {
+    static inline void init() noexcept {
+        P1SEL0 = P1SEL0 | BIT1 | BIT2 | BIT3; // SPI pins
+
+        // Configure USCI_B0 for SPI mode
+        UCB0CTLW0 = UCB0CTLW0 | UCSWRST; // Software reset enabled
+        UCB0CTLW0 = UCB0CTLW0 | UCMODE_0 | UCMST | UCSYNC |
+                    UCCKPL;  // SPI mode, Master mode, sync, high idle clock
+        UCB0BRW = 0x0001;    // baudrate = SMCLK / 8
+        UCB0CTLW0 = UCB0CTLW0 & ~UCSWRST;
+    }
+
+    static inline void read(unsigned char *data, unsigned length) noexcept {
+        for (unsigned i = 0; i < length; i++) {
+            UCB0TXBUF = 0xff;
+            while (UCB0STATW & UCBUSY)
+                ; // wait for transmission
+            data[i] = UCB0RXBUF;
+        }
+    }
+
+    static inline void write(unsigned char const *data, unsigned length) noexcept {
+        for (unsigned i = 0; i < length; i++) {
+            UCB0TXBUF = data[i];
+            while (UCB0STATW & UCBUSY)
+                ; // wait for transmission
+        }
+    }
+};
+
+using tm1628a = uos::dev::tm1628a_base;
+using segment_driver = uos::dev::tm1628a<tm1628a_ucb0_polling, tm1628a_chipselect>;
 
 using timer = uos::dev::msp430::timer_a0;
 
+unsigned char dec_to_seg(unsigned char value, bool zero_enable = true) {
+  switch (value) {
+    case 0:
+      return zero_enable ? 0b0011'1111 : 0b0000'0000;
+    case 1:
+      return 0b0000'0110;
+    case 2:
+      return 0b0101'1011;
+    case 3:
+      return 0b0100'1111;
+    case 4:
+      return 0b0110'0110;
+    case 5:
+      return 0b0110'1101;
+    case 6:
+      return 0b0111'1101;
+    case 7:
+      return 0b0000'0111;
+    case 8:
+      return 0b0111'1111;
+    case 9:
+      return 0b0110'1111;
+    default:
+      return 0b0100'0000;
+  }
+}
+
+bool print_display(int number, bool second_display) {
+    if (number > 999 || number < -99) return false;
+
+    bool negative = number < 0;
+    number = negative ? -number : number;
+
+    int a = number / 100;
+    number -= 100*a;
+    int b = number / 10;
+    number -= 10*b;
+    int c = number;
+    unsigned char seg_a = negative && b > 0  ? 0b0100'0000 : dec_to_seg(a, false);
+    unsigned char seg_b = negative && b == 0 ? 0b0100'0000 : dec_to_seg(b, a > 0);
+    unsigned char seg_c = dec_to_seg(c, true);
+
+    unsigned char address = second_display ? 0 : 6;
+    segment_driver::write(address, seg_c);
+    segment_driver::write(address+2, seg_b);
+    segment_driver::write(address+4, seg_a);
+    return true;
+}
+
+// old code size was 3604!
+
 void main1() {
-
-    tm1628a<tm1628a_ucb0> segment_driver;
-    seg_driver = &segment_driver;
-
-    segment_driver.display_mode(display_mode_t::bits_6_segments_11);
-    segment_driver.prepare_write();
-    segment_driver.display_control(pulse_width_t::_14_of_16, true);
+    segment_driver::display_mode(tm1628a::display_mode_t::bits_6_segments_11);
+    segment_driver::prepare_write();
+    segment_driver::display_control(tm1628a::pulse_width_t::_14_of_16, true);
 
     unsigned char data[14]; // write data to display register, auto increment
     for (unsigned i = 0; i < 13; i += 2) {
@@ -31,7 +125,7 @@ void main1() {
         data[i + 1] = 0x00;
     }
 
-    segment_driver.write(0, data, 14);
+    segment_driver::write(0, data, 14);
 
     max6675_uca0 temp;
 
@@ -55,22 +149,18 @@ void main1() {
 
 
 void main2() {
-    while (!seg_driver) {
-        // TODO replace sleep with yield
-        timer::sleep(1000);
-    }
 
-    pulse_width_t brightness = pulse_width_t::_14_of_16;
+    tm1628a::pulse_width_t brightness = tm1628a::pulse_width_t::_14_of_16;
 
     P2IES = 0b111; // toggle on falling edge (btn pushed down)
 
-    seg_driver->display_control(brightness, true);
+    segment_driver::display_control(brightness, true);
     while (true) {
         P2IFG = 0; // only listen from now for keychanges (debounce)
         uos::dev::msp430::port2::wait_for_change(0b111);
         uos::dev::msp430::eusci_a1::transmit("Button was pressed!\r\n");
         brightness++;
-        seg_driver->display_control(brightness, true);
+        segment_driver::display_control(brightness, true);
         P3OUT = P3OUT | BIT2;
         timer::sleep(5000);
         P3OUT = P3OUT & ~BIT2;
@@ -78,16 +168,12 @@ void main2() {
 }
 
 void main3() {
-    while(!seg_driver) {
-        timer::sleep(1000);
-    }
-
     unsigned char leds = 1;
     bool forwards = true;
     while(true) {
-        seg_driver->write(3, (leds >> 0) & 0b11 | (((leds >> 0) & 0b100) << 1));
-        seg_driver->write(5, (leds >> 3) & 0b1);
-        seg_driver->write(1, (leds >> 4) & 0b11 | (((leds >> 4) & 0b100) << 1));
+        segment_driver::write(3, (leds >> 0) & 0b11 | (((leds >> 0) & 0b100) << 1));
+        segment_driver::write(5, (leds >> 3) & 0b1);
+        segment_driver::write(1, (leds >> 4) & 0b11 | (((leds >> 4) & 0b100) << 1));
         timer::sleep(15000);
 
         if (forwards) {
@@ -122,6 +208,7 @@ int main() {
     // enable USCI1
     UCA1CTLW0 = UCA1CTLW0 & ~UCSWRST;
 
+    segment_driver::init();
 
     // Disable the GPIO power-on default high-impedance mode to activate
     // previously configured port settings
