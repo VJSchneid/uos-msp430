@@ -22,26 +22,7 @@ timer_a_base::task_t *timer_a_base::find_next_ready_task(task_list<task_data> &t
 
 #ifdef UOS_DEV_MSP430_ENABLE_TIMERA0
 void __attribute__((interrupt(TIMER0_A0_VECTOR))) timer_a0_layer::isr() {
-    for (auto &task : timer_a0::waiting_tasks_) {
-        if (current_time() - task.from_timepoint >= task.ticks) {
-            scheduler::unblock(task.nr);
-        }
-    }
-
-    for (auto next_task = timer_a0::find_next_ready_task(timer_a0::waiting_tasks_, wakeup_time());
-        next_task != nullptr;
-        next_task = timer_a0::find_next_ready_task(timer_a0::waiting_tasks_, wakeup_time())) {
-        
-        wakeup_time(next_task->from_timepoint + next_task->ticks);
-
-        if (current_time() - next_task->from_timepoint < next_task->ticks) {
-            break; // did not miss interrupt :)
-        }
-
-        // we might missed interrupt: set next task and unblock current task manually
-        scheduler::unblock(next_task->nr);
-        // TODO: rename unblock to resume
-    }
+    timer_a0::handle_isr();
 
     // wakeup scheduler
     __bic_SR_register_on_exit(LPM0_bits);

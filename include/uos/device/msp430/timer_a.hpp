@@ -82,6 +82,29 @@ struct timer_a : timer_a_base {
 private:
     friend HWLayer;
 
+    static inline void __attribute__((always_inline)) handle_isr() noexcept {
+        for (auto &task : waiting_tasks_) {
+            if (HWLayer::current_time() - task.from_timepoint >= task.ticks) {
+                scheduler::unblock(task.nr);
+            }
+        }
+
+        for (auto next_task = find_next_ready_task(waiting_tasks_, HWLayer::wakeup_time());
+            next_task != nullptr;
+            next_task = find_next_ready_task(waiting_tasks_, HWLayer::wakeup_time())) {
+            
+            HWLayer::wakeup_time(next_task->from_timepoint + next_task->ticks);
+
+            if (HWLayer::current_time() - next_task->from_timepoint < next_task->ticks) {
+                break; // did not miss interrupt :)
+            }
+
+            // we might missed interrupt: set next task and unblock current task manually
+            scheduler::unblock(next_task->nr);
+            // TODO: rename unblock to resume
+        }
+    }
+
     static void check_stop() noexcept {
         for (auto &task : waiting_tasks_) {
             if (scheduler::is_blocked(task.nr)) {
