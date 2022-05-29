@@ -55,7 +55,10 @@ tm1628a_base::pulse_width_t &operator--(tm1628a_base::pulse_width_t &v, int) {
     return --v;
 }
 
-/// SerialInterface must support 3 different types of transfers
+/// SerialInterface must support 3 different types of transfers:
+/// - command write
+/// - command + data write
+/// - command + data read
 template<typename SerialInterface>
 struct tm1628a : tm1628a_base {
     static constexpr void init() {
