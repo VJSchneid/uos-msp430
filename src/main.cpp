@@ -30,6 +30,7 @@ struct tm1628a_chipselect {
 
 struct tm1628a_ucb0_polling {
     static inline void init() noexcept {
+        tm1628a_chipselect::init();
         P1SEL0 = P1SEL0 | BIT1 | BIT2 | BIT3; // SPI pins
 
         // Configure USCI_B0 for SPI mode
@@ -40,7 +41,17 @@ struct tm1628a_ucb0_polling {
         UCB0CTLW0 = UCB0CTLW0 & ~UCSWRST;
     }
 
-    static inline void read(unsigned char *data, unsigned length) noexcept {
+    static inline void write(unsigned char cmd) noexcept {
+        write(cmd, nullptr, 0);
+    }
+
+    static inline void read(unsigned char cmd, unsigned char *data, unsigned length) noexcept {
+        uos::autoselect<tm1628a_chipselect> as;
+        // transmit cmd
+        UCB0TXBUF = cmd;
+        while (UCB0STATW & UCBUSY); // wait for transmission
+
+        // receive data
         for (unsigned i = 0; i < length; i++) {
             UCB0TXBUF = 0xff;
             while (UCB0STATW & UCBUSY)
@@ -49,17 +60,22 @@ struct tm1628a_ucb0_polling {
         }
     }
 
-    static inline void write(unsigned char const *data, unsigned length) noexcept {
+    static inline void write(unsigned char cmd, unsigned char const *data, unsigned length) noexcept {
+        uos::autoselect<tm1628a_chipselect> as;
+        // transmit cmd
+        UCB0TXBUF = cmd;
+        while (UCB0STATW & UCBUSY); // wait for transmission
+
+        // transmit data
         for (unsigned i = 0; i < length; i++) {
             UCB0TXBUF = data[i];
-            while (UCB0STATW & UCBUSY)
-                ; // wait for transmission
+            while (UCB0STATW & UCBUSY); // wait for transmission
         }
     }
 };
 
 using tm1628a = uos::dev::tm1628a_base;
-using segment_driver = uos::dev::tm1628a<tm1628a_ucb0_polling, tm1628a_chipselect>;
+using segment_driver = uos::dev::tm1628a<tm1628a_ucb0_polling>;
 
 using timer = uos::dev::msp430::timer_a0;
 
@@ -111,8 +127,6 @@ bool print_display(int number, bool second_display) {
     segment_driver::write(address+4, seg_a);
     return true;
 }
-
-// old code size was 3604!
 
 void main1() {
     segment_driver::display_mode(tm1628a::display_mode_t::bits_6_segments_11);

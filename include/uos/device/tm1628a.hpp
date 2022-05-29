@@ -55,17 +55,17 @@ tm1628a_base::pulse_width_t &operator--(tm1628a_base::pulse_width_t &v, int) {
     return --v;
 }
 
-template<typename SerialInterface, typename ChipSelect>
+/// SerialInterface must support 3 different types of transfers
+template<typename SerialInterface>
 struct tm1628a : tm1628a_base {
     static constexpr void init() {
-        ChipSelect::init();
         SerialInterface::init();
     }
 
     static constexpr void display_mode(display_mode_t mode) {
         unsigned char cmd = static_cast<unsigned char>(command_t::display_mode) |
                             static_cast<unsigned char>(mode);
-        serial_write(cmd);
+        SerialInterface::write(cmd);
     }
 
     static constexpr void prepare_write(bool address_increment = true) {
@@ -73,7 +73,7 @@ struct tm1628a : tm1628a_base {
                             static_cast<unsigned char>(data_dir_t::write) |
                             static_cast<unsigned char>(address_increment ? address_inc_t::on
                                                                          : address_inc_t::off);
-        serial_write(cmd);
+        SerialInterface::write(cmd);
     }
 
     static constexpr void display_control(pulse_width_t brightness, bool display_enable) {
@@ -81,7 +81,7 @@ struct tm1628a : tm1628a_base {
                             static_cast<unsigned char>(brightness) |
                             static_cast<unsigned char>(display_enable ? display_enable_t::on :
                                                                         display_enable_t::off);
-        serial_write(cmd);
+        SerialInterface::write(cmd);
     }
 
     /**
@@ -96,7 +96,7 @@ struct tm1628a : tm1628a_base {
         unsigned char cmd = static_cast<unsigned char>(command_t::address) |
                             (address & 0xf);
 
-        serial_write(cmd, data, length);
+        SerialInterface::write(cmd, data, length);
     }
 
     /**
@@ -114,29 +114,11 @@ struct tm1628a : tm1628a_base {
                             static_cast<unsigned char>(data_dir_t::read) |
                             static_cast<unsigned char>(address_increment ? address_inc_t::on
                                                                          : address_inc_t::off);
-        serial_read(cmd, data, length);
+        SerialInterface::read(cmd, data, length);
     }
 
     static constexpr void address(unsigned char adr) {
-        serial_write(static_cast<unsigned char>(command_t::address) | (adr & 0xf));
-    }
-
-private:
-    static constexpr void serial_write(unsigned char cmd) {
-        autoselect<ChipSelect> as;
-        SerialInterface::write(&cmd, 1);
-    }
-
-    static constexpr void serial_write(unsigned char cmd, unsigned char const *data, unsigned length) {
-        autoselect<ChipSelect> as;
-        SerialInterface::write(&cmd, 1);
-        SerialInterface::write(data, 1);
-    }
-
-    static constexpr void serial_read(unsigned char cmd, unsigned char *data, unsigned length) {
-        autoselect<ChipSelect> as;
-        SerialInterface::write(&cmd, 1);
-        SerialInterface::read(data, length);
+        SerialInterface::write(static_cast<unsigned char>(command_t::address) | (adr & 0xf));
     }
 };
 
