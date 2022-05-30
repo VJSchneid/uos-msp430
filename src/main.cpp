@@ -37,20 +37,20 @@ struct tm1628a_ucb0_polling {
         UCB0CTLW0 = UCB0CTLW0 | UCSWRST; // Software reset enabled
         UCB0CTLW0 = UCB0CTLW0 | UCMODE_0 | UCMST | UCSYNC |
                     UCCKPL;  // SPI mode, Master mode, sync, high idle clock
-        UCB0BRW = 0x0001;    // baudrate = SMCLK / 8
+        UCB0BRW = 0x0001;    // baudrate = SMCLK / 1
         UCB0CTLW0 = UCB0CTLW0 & ~UCSWRST;
     }
 
-    static inline void write(unsigned char cmd) noexcept {
+    static void write(unsigned char cmd) noexcept {
         write(cmd, nullptr, 0);
     }
 
-    static inline void read(unsigned char cmd, unsigned char *data, unsigned length) noexcept {
+    static void read(unsigned char cmd, unsigned char *data, unsigned length) noexcept {
         uos::autoselect<tm1628a_chipselect> as;
         // transmit cmd
         UCB0TXBUF = cmd;
         while (UCB0STATW & UCBUSY); // wait for transmission
-
+        
         // receive data
         for (unsigned i = 0; i < length; i++) {
             UCB0TXBUF = 0xff;
@@ -60,7 +60,7 @@ struct tm1628a_ucb0_polling {
         }
     }
 
-    static inline void write(unsigned char cmd, unsigned char const *data, unsigned length) noexcept {
+    static void  write(unsigned char cmd, unsigned char const *data, unsigned length) noexcept {
         uos::autoselect<tm1628a_chipselect> as;
         // transmit cmd
         UCB0TXBUF = cmd;

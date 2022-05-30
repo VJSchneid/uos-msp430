@@ -13,6 +13,7 @@ target_compile_definitions(config INTERFACE
   UOS_NUMBER_OF_TASKS=3
   UOS_DEV_MSP430_ENABLE_PORT2
   UOS_DEV_MSP430_ENABLE_TIMERA0
+  UOS_DEV_MSP430_ENABLE_EUSCIA1
 )
 
 target_include_directories(config INTERFACE "include/")

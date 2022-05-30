@@ -28,7 +28,7 @@ struct usci_base {
 };
 
 template<typename HWLayer>
-struct eusci_a : usci_base {
+struct eusci : usci_base {
 
     static void transmit(const char *data, unsigned length) {
         // TODO power save and maybe reset with UCSWRST?
@@ -66,8 +66,9 @@ private:
 };
 
 template<typename HWLayer>
-task_list<usci_base::task_data> eusci_a<HWLayer>::waiting_tx_tasks_;
+task_list<usci_base::task_data> eusci<HWLayer>::waiting_tx_tasks_;
 
+#ifdef UOS_DEV_MSP430_ENABLE_EUSCIA1
 struct eusci_a1_layer {
     static void enable_tx_interrupt() noexcept {
         UCA1IE = UCA1IE | UCTXCPTIFG;
@@ -91,7 +92,34 @@ struct eusci_a1_layer {
 
     static void __attribute__((interrupt(USCI_A1_VECTOR))) isr();
 };
+using eusci_a1 = eusci<eusci_a1_layer>;
+#endif
 
-using eusci_a1 = eusci_a<eusci_a1_layer>;
+#ifdef UOS_DEV_MSP430_ENABLE_EUSCIB0
+struct eusci_b0_layer {
+    static void enable_tx_interrupt() noexcept {
+        UCB0IE = UCB0IE | UCTXCPTIFG;
+    }
+
+    static void disable_tx_interrupt() noexcept {
+        UCB0IE = UCB0IE & ~UCTXCPTIFG;
+    }
+
+    static bool tx_busy() noexcept {
+        return UCB0STATW & UCBUSY;
+    }
+
+    static bool tx_interrupt_pending() noexcept {
+        return UCB0IFG & UCTXCPTIFG;
+    }
+
+    static void raise_tx_interrupt() noexcept {
+        UCB0IFG = UCB0IFG | UCTXCPTIFG;
+    }
+
+    static void __attribute__((interrupt(USCI_B0_VECTOR))) isr();
+};
+using eusci_b0 = eusci<eusci_b0_layer>;
+#endif
 
 }
