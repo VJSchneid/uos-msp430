@@ -20,27 +20,36 @@ struct timer_a_base {
 
 template<typename HWLayer>
 struct timer_a : timer_a_base {
+
+    // TODO: test me!
+    static timer_a_base::task_t timestamp_from_now(unsigned ticks) noexcept {
+        auto my_task = waiting_tasks_.create();
+        my_task.ticks = ticks;
+        my_task.from_timepoint = HWLayer::current_time();
+        return my_task;
+    }
+
     static void sleep(unsigned ticks) noexcept {
         if (ticks <= 0) return;
 
         // prepare suspend (i.e. reset block ctr to zero)
         scheduler::prepare_suspend();
 
+        auto my_task = timestamp_from_now(ticks);
+
+        sleep(my_task);
+    }
+
+    // TODO: test me!
+    static void sleep(timer_a_base::task_t &my_task) noexcept {
         bool suspend = true;
 
-        auto my_task = waiting_tasks_.create();
-        my_task.ticks = ticks; 
-
-        // after setting from_timepoint we have to make sure that
+        // since timestamp creation we have to make sure that
         // the interrupt for short sleeps is not missed
-        my_task.from_timepoint = HWLayer::current_time();
-
-        // insert waiting_task to list
-        waiting_tasks_.prepend(my_task);
 
         // check if current sleep should result in next wakeup interrupt
         if (!HWLayer::running() ||
-            (HWLayer::wakeup_time() - my_task.from_timepoint) >= ticks) {
+            (HWLayer::wakeup_time() - my_task.from_timepoint) >= my_task.ticks) {
 
             // update wakeup time as this sleep is waked up sooner
             HWLayer::wakeup_time(my_task.from_timepoint + my_task.ticks);
@@ -67,16 +76,15 @@ struct timer_a : timer_a_base {
             }
         }
 
-        // make sure timer is running
-        HWLayer::enable_timer();
-
         if (suspend) {
+            // make sure timer is running
+            HWLayer::enable_timer();
+
             scheduler::suspend_me();
         }
 
         waiting_tasks_.remove(my_task);
         check_stop();
-        
     }
 
 private:
