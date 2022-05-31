@@ -21,12 +21,22 @@ struct timer_a_base {
 template<typename HWLayer>
 struct timer_a : timer_a_base {
 
+    struct delay_t : task_t {
+        delay_t(unsigned ticks_from_now) noexcept : task_t(waiting_tasks_.create()) {
+            ticks = ticks_from_now;
+            from_timepoint = HWLayer::current_time();
+            waiting_tasks_.prepend(*this);
+        }
+
+        ~delay_t() noexcept {
+            waiting_tasks_.remove(*this);
+            check_stop();
+        }
+    };
+
     // TODO: test me!
-    static timer_a_base::task_t timestamp_from_now(unsigned ticks) noexcept {
-        auto my_task = waiting_tasks_.create();
-        my_task.ticks = ticks;
-        my_task.from_timepoint = HWLayer::current_time();
-        return my_task;
+    static delay_t timestamp_from_now(unsigned ticks) noexcept {
+        return delay_t(ticks);
     }
 
     static void sleep(unsigned ticks) noexcept {
@@ -82,9 +92,6 @@ struct timer_a : timer_a_base {
 
             scheduler::suspend_me();
         }
-
-        waiting_tasks_.remove(my_task);
-        check_stop();
     }
 
 private:
@@ -114,12 +121,9 @@ private:
     }
 
     static void check_stop() noexcept {
-        for (auto &task : waiting_tasks_) {
-            if (scheduler::is_blocked(task.nr)) {
-                return;
-            }
+        if (waiting_tasks_.empty()) {
+            HWLayer::stop_timer(); // work is done: stop timer
         }
-        HWLayer::stop_timer(); // work is done: stop timer
     }
 
     static task_list<task_data> waiting_tasks_;
@@ -144,7 +148,7 @@ struct timer_a0_layer {
 
     static inline void enable_timer() noexcept {
         TA0CCTL0 = CCIE;
-        TA0CTL = TASSEL__SMCLK | ID__8 | MC__CONTINUOUS;
+        TA0CTL = TASSEL__SMCLK | ID__1 | MC__CONTINUOUS;
     }
 
     static inline void stop_timer() noexcept {

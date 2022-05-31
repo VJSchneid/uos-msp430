@@ -28,7 +28,7 @@ void panic() {
 
 namespace uos::dev::msp430 {
 
-void thread_init(void **new_sp, void (*initial_function)()) noexcept {
+void scheduler_layer::thread_init(void **new_sp, void (*initial_function)()) noexcept {
     SP_PUSH(*new_sp, &panic);
     SP_PUSH(*new_sp, initial_function);
     SP_SUB(*new_sp, SP_REGISTER_OFFSET);

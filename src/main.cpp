@@ -60,7 +60,7 @@ struct tm1628a_ucb0_polling {
         }
     }
 
-    static void  write(unsigned char cmd, unsigned char const *data, unsigned length) noexcept {
+    static void write(unsigned char cmd, unsigned char const *data, unsigned length) noexcept {
         uos::autoselect<tm1628a_chipselect> as;
         // transmit cmd
         UCB0TXBUF = cmd;
@@ -157,7 +157,12 @@ void main1() {
 
         print_display(result + ((t & 0x7) << 1), 1);
         P3OUT = P3OUT ^ BIT0;
-        timer::sleep(60000);
+
+        auto timestamp = timer::timestamp_from_now(60000);
+        for (int i = 0; i < 8; i++) {
+            timer::sleep(timestamp);
+            timestamp.from_timepoint += 60000;
+        }
     }
 }
 

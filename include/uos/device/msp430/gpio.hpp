@@ -30,6 +30,8 @@ struct gpio : gpio_base {
         // set interrupt enable with bitmask
         PortLayer::enable_interrupt(mask);
 
+        scheduler::suspend_me();
+
         waiting_tasks_.remove(my_task);
     }
 
