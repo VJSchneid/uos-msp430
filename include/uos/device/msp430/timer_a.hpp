@@ -9,8 +9,11 @@ struct timer_a_base {
     struct task_data {
         // all fields that are accessed by ISR must
         // be marked volatile to prevent invalid content
+
+        // starting timepoint is used to check wether an interrupt was missed
+        // when configuring the next wakeup_time
+        volatile unsigned starting_timepoint;
         volatile unsigned ticks;
-        volatile unsigned from_timepoint;
     };
 
     using task_t = task_list<task_data>::task_t;
@@ -21,37 +24,44 @@ struct timer_a_base {
 template<typename HWLayer>
 struct timer_a : timer_a_base {
 
-    struct delay_t : task_t {
+    struct delay_t : private task_t {
         delay_t(unsigned ticks_from_now) noexcept : task_t(waiting_tasks_.create()) {
+            starting_timepoint = HWLayer::current_time();
             ticks = ticks_from_now;
-            from_timepoint = HWLayer::current_time();
             waiting_tasks_.prepend(*this);
+        }
+
+        /// @warning the current delay has to be expired (e.g. by calling sleep)!
+        void refresh(unsigned additional_ticks) {
+            unsigned old_timepoint = starting_timepoint + ticks;
+            starting_timepoint = old_timepoint;
+            ticks = additional_ticks;
         }
 
         ~delay_t() noexcept {
             waiting_tasks_.remove(*this);
             check_stop();
         }
+        friend timer_a;
     };
 
-    // TODO: test me!
-    static delay_t timestamp_from_now(unsigned ticks) noexcept {
+    static delay_t delay_from_now(unsigned ticks) noexcept {
         return delay_t(ticks);
     }
 
     static void sleep(unsigned ticks) noexcept {
         if (ticks <= 0) return;
 
-        // prepare suspend (i.e. reset block ctr to zero)
-        scheduler::prepare_suspend();
-
-        auto my_task = timestamp_from_now(ticks);
+        auto my_task = delay_from_now(ticks);
 
         sleep(my_task);
     }
 
     // TODO: test me!
-    static void sleep(timer_a_base::task_t &my_task) noexcept {
+    static void sleep(delay_t &my_task) noexcept {
+        // prepare suspend (i.e. reset block ctr to zero)
+        scheduler::prepare_suspend();
+
         bool suspend = true;
 
         // since timestamp creation we have to make sure that
@@ -59,19 +69,19 @@ struct timer_a : timer_a_base {
 
         // check if current sleep should result in next wakeup interrupt
         if (!HWLayer::running() ||
-            (HWLayer::wakeup_time() - my_task.from_timepoint) >= my_task.ticks) {
+            (HWLayer::wakeup_time() - my_task.starting_timepoint) >= my_task.ticks) {
 
             // update wakeup time as this sleep is waked up sooner
-            HWLayer::wakeup_time(my_task.from_timepoint + my_task.ticks);
+            HWLayer::wakeup_time(my_task.starting_timepoint + my_task.ticks);
 
             // check wether the interrupt was (likely) missed
             // i.e. current_time reached wakeup_time before it was set
-            auto *task = &my_task;
-            while (HWLayer::current_time() - task->from_timepoint >= task->ticks) {
+            task_t *task = &my_task;
+            while (HWLayer::current_time() - task->starting_timepoint >= task->ticks) {
                 suspend = false; // we do not need to suspend anymore
-                if (HWLayer::wakeup_time() != task->from_timepoint + task->ticks) {
-                    // wakeup_time was already updated from isr
-                    // no work must be done here
+                if (HWLayer::wakeup_time() != task->starting_timepoint + task->ticks) {
+                    // wakeup_time was already updated from ISR
+                    // no further work has to be done here
                     break;
                 }
                 // update for next waiting task
@@ -82,12 +92,12 @@ struct timer_a : timer_a_base {
                 }
 
                 // update wakeup_time to cover next task
-                HWLayer::wakeup_time(task->from_timepoint + task->ticks);
+                HWLayer::wakeup_time(task->starting_timepoint + task->ticks);
             }
         }
 
         if (suspend) {
-            // make sure timer is running
+            // make sure the timer is running
             HWLayer::enable_timer();
 
             scheduler::suspend_me();
@@ -99,7 +109,8 @@ private:
 
     static inline void __attribute__((always_inline)) handle_isr() noexcept {
         for (auto &task : waiting_tasks_) {
-            if (HWLayer::current_time() - task.from_timepoint >= task.ticks) {
+            // unblock all tasks which expired
+            if (HWLayer::wakeup_time() == task.starting_timepoint + task.ticks) {
                 scheduler::unblock(task.nr);
             }
         }
@@ -108,14 +119,15 @@ private:
             next_task != nullptr;
             next_task = find_next_ready_task(waiting_tasks_, HWLayer::wakeup_time())) {
             
-            HWLayer::wakeup_time(next_task->from_timepoint + next_task->ticks);
+            HWLayer::wakeup_time(next_task->starting_timepoint + next_task->ticks);
 
-            if (HWLayer::current_time() - next_task->from_timepoint < next_task->ticks) {
+            // check if delay already expired
+            if (HWLayer::current_time() - next_task->starting_timepoint < next_task->ticks) {
                 break; // did not miss interrupt :)
             }
 
-            // we might missed interrupt: set next task and unblock current task manually
-            scheduler::unblock(next_task->nr);
+            // we missed interrupt: set next task and unblock current task manually
+            scheduler::unblock(next_task->nr); // TODO can this result in multiple unblocks?
             // TODO: rename unblock to resume
         }
     }

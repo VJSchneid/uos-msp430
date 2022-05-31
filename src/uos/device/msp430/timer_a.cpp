@@ -6,15 +6,13 @@ timer_a_base::task_t *timer_a_base::find_next_ready_task(task_list<task_data> &t
     if (tl.empty()) return nullptr;
 
     task_t *next_task = nullptr;
-    unsigned next_task_timepoint; // = next_task->from_timepoint - current_time + next_task->ticks;
+    unsigned min_ticks_until_trigger = 0xffff;
 
     for (auto &task : tl) {
-        if (current_time - task.from_timepoint < task.ticks ) { // task is in sleep
-            unsigned this_task_timepoint = task.from_timepoint - current_time + task.ticks;
-            if (next_task == nullptr || this_task_timepoint < next_task_timepoint) {
-                next_task_timepoint = this_task_timepoint;
-                next_task = &task;
-            }
+        unsigned ticks_until_trigger = task.starting_timepoint + task.ticks - current_time - 1;
+        if (ticks_until_trigger <= min_ticks_until_trigger) {
+            next_task = &task;
+            min_ticks_until_trigger = ticks_until_trigger;
         }
     }
     return next_task;
