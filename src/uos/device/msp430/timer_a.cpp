@@ -10,7 +10,7 @@ timer_a_base::task_t *timer_a_base::find_next_ready_task(task_list<task_data> &t
 
     for (auto &task : tl) {
         unsigned ticks_until_trigger = task.starting_timepoint + task.ticks - current_time - 1;
-        if (ticks_until_trigger <= min_ticks_until_trigger) {
+        if (ticks_until_trigger <= min_ticks_until_trigger && current_time - task.starting_timepoint < task.ticks) {
             next_task = &task;
             min_ticks_until_trigger = ticks_until_trigger;
         }

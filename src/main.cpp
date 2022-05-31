@@ -148,9 +148,9 @@ void main1() {
     uos::uca1.transmit("Version: " GIT_VERSION "\r\n");
     uos::uca1.transmit("Build Date: " __DATE__ " " __TIME__ "\r\n");*/
 
-    int delay = 65200;
+    unsigned delay = 65500;
+    volatile unsigned t1 = TA0R;
     auto timestamp = timer::delay_from_now(delay);
-    auto t1 = TA0R;
     while (1) {
         auto t = temp.read();
 
@@ -161,12 +161,11 @@ void main1() {
         //print_display(result + ((t & 0x7) << 1), 1);
         P3OUT = P3OUT ^ BIT0;
 
-        for (int i = 0; i < 8; i++) {
+        for (int i = 0; i < 2; i++) {
             timer::sleep(timestamp);
             auto t2 = TA0R;
-            volatile int diff = (t2-t1-delay);
-            if (!print_display(diff < 0 ? -diff : diff, 1) || diff == 5) {
-                diff = diff + 1;
+            volatile int diff = delay + t1 - t2;
+            if (!print_display(diff < 0 ? -diff : diff, 1)) {
                 print_display(-1, 1);
             }
             t1 = t2;

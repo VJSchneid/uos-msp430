@@ -68,8 +68,8 @@ struct timer_a : timer_a_base {
         // the interrupt for short sleeps is not missed
 
         // check if current sleep should result in next wakeup interrupt
-        if (!HWLayer::running() ||
-            (HWLayer::wakeup_time() - my_task.starting_timepoint) >= my_task.ticks) {
+        auto time = HWLayer::current_time();
+        if (HWLayer::wakeup_time() - time > my_task.starting_timepoint + my_task.ticks - time) {
 
             // update wakeup time as this sleep is waked up sooner
             HWLayer::wakeup_time(my_task.starting_timepoint + my_task.ticks);
@@ -96,6 +96,7 @@ struct timer_a : timer_a_base {
             }
         }
 
+        end:
         if (suspend) {
             // make sure the timer is running
             HWLayer::enable_timer();
@@ -160,7 +161,7 @@ struct timer_a0_layer {
 
     static inline void enable_timer() noexcept {
         TA0CCTL0 = CCIE;
-        TA0CTL = TASSEL__SMCLK | ID__1 | MC__CONTINUOUS;
+        TA0CTL = TASSEL__ACLK | ID__2 | MC__CONTINUOUS;
     }
 
     static inline void stop_timer() noexcept {
