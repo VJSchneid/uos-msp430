@@ -64,43 +64,26 @@ struct timer_a : timer_a_base {
 
         bool suspend = true;
 
-        // since timestamp creation we have to make sure that
-        // the interrupt for short sleeps is not missed
-
-        // check if current sleep should result in next wakeup interrupt
+        // stop timer before updating TAxCCRx
+        // as recommended in Family User Guide (section 13.2.4.2)
+        HWLayer::stop_timer();
         auto time = HWLayer::current_time();
-        if (HWLayer::wakeup_time() - time > my_task.starting_timepoint + my_task.ticks - time) {
-
-            // update wakeup time as this sleep is waked up sooner
-            HWLayer::wakeup_time(my_task.starting_timepoint + my_task.ticks);
-
-            // check wether the interrupt was (likely) missed
-            // i.e. current_time reached wakeup_time before it was set
-            task_t *task = &my_task;
-            while (HWLayer::current_time() - task->starting_timepoint >= task->ticks) {
-                suspend = false; // we do not need to suspend anymore
-                if (HWLayer::wakeup_time() != task->starting_timepoint + task->ticks) {
-                    // wakeup_time was already updated from ISR
-                    // no further work has to be done here
-                    break;
-                }
-                // update for next waiting task
-                task = find_next_ready_task(waiting_tasks_, HWLayer::wakeup_time());
-                if (!task) {
-                    // no task available
-                    break;
-                }
-
-                // update wakeup_time to cover next task
-                HWLayer::wakeup_time(task->starting_timepoint + task->ticks);
+        // check if sleep timepoint is in future
+        if (time - my_task.starting_timepoint < my_task.ticks) {
+            // check if currently set wakeup_time has to wait longer as this delay
+            if (HWLayer::wakeup_time() - time > my_task.starting_timepoint + my_task.ticks - time) {
+                // wakeup time has to be updated
+                HWLayer::wakeup_time(my_task.starting_timepoint + my_task.ticks);
             }
         }
+        else {
+            // delay is already expired, do not suspend
+            suspend = false;
+        }
+        HWLayer::enable_timer();
 
-        end:
+        
         if (suspend) {
-            // make sure the timer is running
-            HWLayer::enable_timer();
-
             scheduler::suspend_me();
         }
     }
@@ -120,17 +103,21 @@ private:
             next_task != nullptr;
             next_task = find_next_ready_task(waiting_tasks_, HWLayer::wakeup_time())) {
             
+            // stop timer before updating TAxCCRx
+            // as recommended in Family User Guide (section 13.2.4.2)
+            HWLayer::stop_timer();
             HWLayer::wakeup_time(next_task->starting_timepoint + next_task->ticks);
 
-            // check if delay already expired
+            // check if delay is not expired
             if (HWLayer::current_time() - next_task->starting_timepoint < next_task->ticks) {
                 break; // did not miss interrupt :)
             }
 
-            // we missed interrupt: set next task and unblock current task manually
-            scheduler::unblock(next_task->nr); // TODO can this result in multiple unblocks?
+            // delay already expired: set next task and unblock current task manually
+            scheduler::unblock(next_task->nr);
             // TODO: rename unblock to resume
         }
+        HWLayer::enable_timer();
     }
 
     static void check_stop() noexcept {
@@ -161,7 +148,7 @@ struct timer_a0_layer {
 
     static inline void enable_timer() noexcept {
         TA0CCTL0 = CCIE;
-        TA0CTL = TASSEL__ACLK | ID__2 | MC__CONTINUOUS;
+        TA0CTL = TASSEL__SMCLK | ID__2 | MC__CONTINUOUS;
     }
 
     static inline void stop_timer() noexcept {

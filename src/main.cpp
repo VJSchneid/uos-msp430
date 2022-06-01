@@ -161,7 +161,7 @@ void main1() {
         //print_display(result + ((t & 0x7) << 1), 1);
         P3OUT = P3OUT ^ BIT0;
 
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 4; i++) {
             timer::sleep(timestamp);
             auto t2 = TA0R;
             volatile int diff = delay + t1 - t2;
