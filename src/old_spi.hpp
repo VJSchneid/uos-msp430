@@ -1,3 +1,5 @@
+#pragma once
+
 #include <msp430.h>
 
 struct max6675_uca0 {
