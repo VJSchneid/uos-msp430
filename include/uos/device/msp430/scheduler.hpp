@@ -1,6 +1,6 @@
 #pragma once
 
-#include <uos/scheduler.hpp>
+#include <uos/detail/basic_scheduler.hpp>
 
 #include <msp430.h>
 
