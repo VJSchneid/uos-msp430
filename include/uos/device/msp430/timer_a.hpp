@@ -1,9 +1,8 @@
 #pragma once
 
-#include <uos/device/msp430/task_list.hpp>
+#include <uos/detail/task_list.hpp>
 
 namespace uos::dev::msp430 {
-
 
 template<typename Scheduler>
 struct timer_a_base {
