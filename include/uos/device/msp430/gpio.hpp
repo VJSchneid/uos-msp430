@@ -3,8 +3,6 @@
 #include <uos/device/msp430/task_list.hpp>
 #include <uos/device/msp430/scheduler.hpp>
 
-#include <msp430.h>
-
 namespace uos::dev::msp430 {
 
 struct gpio_base {
