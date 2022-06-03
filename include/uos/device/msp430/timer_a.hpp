@@ -4,6 +4,8 @@
 
 namespace uos::dev::msp430 {
 
+
+template<typename Scheduler>
 struct timer_a_base {
 
     struct task_data {
@@ -16,26 +18,43 @@ struct timer_a_base {
         volatile unsigned ticks;
     };
 
-    using task_t = task_list<task_data>::task_t;
+    using task_list_t = task_list<task_data, Scheduler>;
+    using task_t = task_list_t::task_t;
 
-    static task_t *find_next_ready_task(task_list<task_data> &tl, unsigned current_time) noexcept;
+    static task_t *find_next_ready_task(task_list_t &tl, unsigned current_time) noexcept {
+        if (tl.empty()) return nullptr;
+
+        task_t *next_task = nullptr;
+        unsigned min_ticks_until_trigger = 0xffff;
+
+        for (auto &task : tl) {
+            unsigned ticks_until_trigger = task.starting_timepoint + task.ticks - current_time - 1;
+            if (ticks_until_trigger <= min_ticks_until_trigger && current_time - task.starting_timepoint < task.ticks) {
+                next_task = &task;
+                min_ticks_until_trigger = ticks_until_trigger;
+            }
+        }
+        return next_task;
+    }
 };
 
-template<typename HWLayer>
-struct timer_a : timer_a_base {
+template<typename HWLayer, typename Scheduler>
+struct timer_a : timer_a_base<Scheduler> {
+    using base = timer_a_base<Scheduler>;
 
-    struct delay_t : private task_t {
-        delay_t(unsigned ticks_from_now) noexcept : task_t(waiting_tasks_.create()) {
-            starting_timepoint = HWLayer::current_time();
-            ticks = ticks_from_now;
+    struct delay_t : private base::task_t {
+        delay_t(unsigned ticks_from_now) noexcept : base::task_t(waiting_tasks_.create()) {
+            base::task_t::starting_timepoint = HWLayer::current_time();
+            base::task_t::ticks = ticks_from_now;
             waiting_tasks_.prepend(*this);
         }
 
         /// @warning the current delay has to be expired (e.g. by calling sleep)!
         void refresh(unsigned additional_ticks) {
-            unsigned old_timepoint = starting_timepoint + ticks;
-            starting_timepoint = old_timepoint;
-            ticks = additional_ticks;
+            unsigned old_timepoint = base::task_t::starting_timepoint + 
+                                     base::task_t::ticks;
+            base::task_t::starting_timepoint = old_timepoint;
+            base::task_t::ticks = additional_ticks;
         }
 
         ~delay_t() noexcept {
@@ -60,7 +79,7 @@ struct timer_a : timer_a_base {
     // TODO: test me!
     static void sleep(delay_t &my_task) noexcept {
         // prepare suspend (i.e. reset block ctr to zero)
-        scheduler::prepare_suspend();
+        Scheduler::prepare_suspend();
 
         bool suspend = true;
 
@@ -84,7 +103,7 @@ struct timer_a : timer_a_base {
 
         
         if (suspend) {
-            scheduler::suspend_me();
+            Scheduler::suspend_me();
         }
     }
 
@@ -95,13 +114,13 @@ private:
         for (auto &task : waiting_tasks_) {
             // unblock all tasks which expired
             if (HWLayer::wakeup_time() == task.starting_timepoint + task.ticks) {
-                scheduler::unblock(task.nr);
+                Scheduler::unblock(task.nr);
             }
         }
 
-        for (auto next_task = find_next_ready_task(waiting_tasks_, HWLayer::wakeup_time());
+        for (auto next_task = base::find_next_ready_task(waiting_tasks_, HWLayer::wakeup_time());
             next_task != nullptr;
-            next_task = find_next_ready_task(waiting_tasks_, HWLayer::wakeup_time())) {
+            next_task = base::find_next_ready_task(waiting_tasks_, HWLayer::wakeup_time())) {
             
             // stop timer before updating TAxCCRx
             // as recommended in Family User Guide (section 13.2.4.2)
@@ -114,7 +133,7 @@ private:
             }
 
             // delay already expired: set next task and unblock current task manually
-            scheduler::unblock(next_task->nr);
+            Scheduler::unblock(next_task->nr);
             // TODO: rename unblock to resume
         }
         HWLayer::enable_timer();
@@ -126,11 +145,11 @@ private:
         }
     }
 
-    static task_list<task_data> waiting_tasks_;
+    static base::task_list_t waiting_tasks_;
 };
 
-template<typename HWLayer>
-task_list<timer_a_base::task_data> timer_a<HWLayer>::waiting_tasks_;
+template<typename HWLayer, typename Scheduler>
+typename timer_a_base<Scheduler>::task_list_t timer_a<HWLayer, Scheduler>::waiting_tasks_;
 
 #ifdef UOS_DEV_MSP430_ENABLE_TIMERA0
 struct timer_a0_layer {
@@ -162,7 +181,7 @@ struct timer_a0_layer {
     static void __attribute__((interrupt(TIMER0_A0_VECTOR))) isr();
 };
 
-using timer_a0 = timer_a<timer_a0_layer>;
+using timer_a0 = timer_a<timer_a0_layer, scheduler>;
 #endif
 
 }
