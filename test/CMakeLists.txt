@@ -1,10 +1,14 @@
+cmake_policy(SET CMP0076 NEW)
+
 find_package(Catch2 REQUIRED)
 
 add_executable(uos_test
   main.cpp
 )
 
-target_link_libraries(uos_test PRIVATE Catch2::Catch2)
+add_subdirectory(detail)
+
+target_link_libraries(uos_test PRIVATE config Catch2::Catch2)
 
 include(CTest)
 include(Catch)
