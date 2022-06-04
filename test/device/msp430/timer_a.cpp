@@ -78,3 +78,88 @@ TEST_CASE("find_next_ready_task for timer_a with maximal values", "[msp430][time
   CHECK(timer::find_next_ready_task(tl, 0)      == &tasks_[2]);
   CHECK(timer::find_next_ready_task(tl, 10)     == &tasks_[0]);
 }
+
+struct timer_test_layer {
+  static uint16_t wakeup_time() noexcept {
+    return taxccr0;
+  }
+  
+  static uint16_t current_time() noexcept {
+    return taxr;
+  }
+
+  static void wakeup_time(uint16_t timestamp) noexcept {
+    // wakeup time should only be set, when timer is disabled 
+    CHECK(!running());
+    taxccr0 = timestamp;
+  }
+
+  static void enable_timer() noexcept {
+    timer_en = true;
+  }
+
+  static void stop_timer() noexcept {
+    timer_en = false;
+  }
+
+  static bool running() noexcept {
+    return timer_en;
+  }
+
+  static void isr() noexcept;
+
+  static void reset() noexcept {
+    taxccr0 = 0;
+    taxr = 0;
+    timer_en = false;
+  }
+
+  static inline uint16_t taxccr0;
+  static inline uint16_t taxr;
+  static inline bool timer_en;
+};
+
+using test_timer = timer_a<timer_test_layer, stub_scheduler>;
+
+void timer_test_layer::isr() noexcept {
+  test_timer::handle_isr();
+}
+
+TEST_CASE("basic timer_a sleep", "[msp430][timer]") {
+  timer_test_layer::reset();
+  stub_scheduler::init();
+
+  uint16_t expected_taxccr0;
+  uint16_t wakeup_time;
+  bool just_suspend_once = true;
+
+  stub_schedule_layer::on_suspension = [&]() {
+    REQUIRE(just_suspend_once);
+    // timer has to run always, when suspended
+    CHECK(timer_test_layer::running());
+
+    REQUIRE(timer_test_layer::taxccr0 == expected_taxccr0);
+
+    timer_test_layer::taxr = wakeup_time;
+    timer_test_layer::isr();
+
+    just_suspend_once = false;
+  };
+
+  expected_taxccr0 = 1000;
+  wakeup_time = 1000;
+  test_timer::sleep(1000);
+  CHECK(!timer_test_layer::running());
+
+  just_suspend_once = true;
+  expected_taxccr0 = 1200;
+  wakeup_time = 1210;
+  test_timer::sleep(200);
+  CHECK(!timer_test_layer::running());
+
+  just_suspend_once = true;
+  expected_taxccr0 = 1194;
+  wakeup_time = 1200;
+  test_timer::sleep(0xfff0);
+  CHECK(!timer_test_layer::running());
+}
