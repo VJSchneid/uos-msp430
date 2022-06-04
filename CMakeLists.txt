@@ -10,7 +10,7 @@ target_compile_features(config INTERFACE cxx_std_20)
 target_compile_options(config INTERFACE "-g")
 
 target_include_directories(config INTERFACE "include/")
-target_compile_definitions(config INTERFACE UOS_ARCH=${CMAKE_SYSTEM_PROCESSOR})
+target_compile_definitions(config INTERFACE UOS_ARCH_$<UPPER_CASE:${CMAKE_SYSTEM_PROCESSOR}>)
 
 # msp430 specific configuration (for main example)
 if(${CMAKE_SYSTEM_PROCESSOR} STREQUAL "msp430")

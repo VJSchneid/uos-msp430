@@ -2,6 +2,8 @@
 
 #include <uos/basic_scheduler.hpp>
 
+#ifdef UOS_ARCH_MSP430
+
 #include <msp430.h>
 
 extern "C" {
@@ -32,3 +34,5 @@ struct scheduler_layer {
 using scheduler = basic_scheduler<dev::msp430::scheduler_layer>;
 
 }
+
+#endif
