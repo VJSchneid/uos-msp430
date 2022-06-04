@@ -2,6 +2,7 @@
 
 #include <uos/detail/task_list.hpp>
 #include <uos/device/msp430/scheduler.hpp>
+#include <stdint.h>
 
 namespace uos::dev::msp430 {
 
@@ -14,22 +15,23 @@ struct timer_a_base {
 
         // starting timepoint is used to check wether an interrupt was missed
         // when configuring the next wakeup_time
-        volatile unsigned starting_timepoint;
-        volatile unsigned ticks;
+        volatile uint16_t starting_timepoint;
+        volatile uint16_t ticks;
     };
 
     using task_list_t = task_list<task_data, Scheduler>;
     using task_t = task_list_t::task_t;
 
-    static task_t *find_next_ready_task(task_list_t &tl, unsigned current_time) noexcept {
+    static task_t *find_next_ready_task(task_list_t &tl, uint16_t current_time) noexcept {
         if (tl.empty()) return nullptr;
 
         task_t *next_task = nullptr;
-        unsigned min_ticks_until_trigger = 0xffff;
+        uint16_t min_ticks_until_trigger = 0xffff;
 
         for (auto &task : tl) {
-            unsigned ticks_until_trigger = task.starting_timepoint + task.ticks - current_time - 1;
-            if (ticks_until_trigger <= min_ticks_until_trigger && current_time - task.starting_timepoint < task.ticks) {
+            uint16_t ticks_until_trigger = task.starting_timepoint + task.ticks - current_time;
+            uint16_t ticks_from_startpoint = current_time - task.starting_timepoint;
+            if (ticks_until_trigger <= min_ticks_until_trigger && ticks_from_startpoint < task.ticks) {
                 next_task = &task;
                 min_ticks_until_trigger = ticks_until_trigger;
             }

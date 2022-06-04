@@ -7,6 +7,7 @@ add_executable(uos_test
 )
 
 add_subdirectory(detail)
+add_subdirectory(device)
 
 target_link_libraries(uos_test PRIVATE config Catch2::Catch2)
 
