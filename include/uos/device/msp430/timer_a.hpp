@@ -102,8 +102,10 @@ struct timer_a : timer_a_base<Scheduler> {
         // check that sleep timepoint is in future
         if (!my_task.is_expired(time)) {
             // check if currently set wakeup_time has to wait longer as this delay
+            uint16_t current_time_to_wait = HWLayer::wakeup_time() - time;
+            uint16_t my_task_time_to_wait = my_task.wakeup_time() - time;
             if (waiting_tasks_.waiting_tasks_->next == nullptr ||
-                HWLayer::wakeup_time() - time > my_task.wakeup_time() - time) {
+                current_time_to_wait > my_task_time_to_wait) {
                 // wakeup time has to be updated
                 HWLayer::wakeup_time(my_task.wakeup_time());
             }
@@ -118,6 +120,10 @@ struct timer_a : timer_a_base<Scheduler> {
         if (suspend) {
             Scheduler::suspend_me();
         }
+    }
+
+    static bool idle() noexcept {
+        return waiting_tasks_.empty();
     }
 
 private:

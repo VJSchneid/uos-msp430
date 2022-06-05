@@ -9,10 +9,10 @@ struct task_data {
   int extra_data = 123;
 };
 
-static std::vector<task_list<task_data, stub_scheduler>::task_t> tasks_;
+static std::vector<task_list<task_data, callback_scheduler>::task_t> tasks_;
 
 TEST_CASE("prepend created tasks in task_list", "[task_list]") {
-  task_list<task_data, stub_scheduler> tl;
+  task_list<task_data, callback_scheduler> tl;
 
   REQUIRE(tl.empty());
 

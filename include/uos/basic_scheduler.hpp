@@ -57,6 +57,7 @@ struct basic_scheduler {
         return true;
     }
 
+private:
     static volatile task_t tasks_[UOS_NUMBER_OF_TASKS];
     static volatile unsigned active_task_;
 };
