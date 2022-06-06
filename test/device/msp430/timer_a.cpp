@@ -16,6 +16,38 @@ static void add_task(timer_a_base<callback_scheduler>::task_list_t &tl,
   tl.prepend(td);
 }
 
+TEST_CASE("check if sleep task is expired", "[msp430][timer]") {
+  using task = timer_a_base<callback_scheduler>::task_data;
+
+  task t;
+  t.starting_timepoint = 0x1000;
+  t.ticks = 0x1000;
+  CHECK(t.is_expired(0x0000));
+  CHECK(t.is_expired(0x00ff));
+  CHECK(not t.is_expired(0x1000));
+  CHECK(not t.is_expired(0x1fff));
+  CHECK(t.is_expired(0x2000));
+  CHECK(t.is_expired(0x4000));
+  CHECK(t.is_expired(0xffff));
+}
+
+TEST_CASE("check if sleep task is expired with overflow", "[msp430][timer]") {
+  using task = timer_a_base<callback_scheduler>::task_data;
+
+  task t;
+  t.starting_timepoint = 60000;
+  t.ticks = 50000;
+
+  CHECK(t.is_expired(59999));
+  CHECK(not t.is_expired(60000));
+  CHECK(not t.is_expired(0xffff));
+  CHECK(not t.is_expired(0));
+  CHECK(not t.is_expired(20000));
+  CHECK(not t.is_expired(44463));
+  CHECK(t.is_expired(44464));
+  CHECK(t.is_expired(50000));
+}
+
 TEST_CASE("find_next_ready_task for timer_a using common values", "[msp430][timer]") {
   using timer = timer_a_base<callback_scheduler>;
 
@@ -325,9 +357,13 @@ TEST_CASE("timer_a resume multiple threads with overflow", "[msp430][timer]") {
 
     REQUIRE(timer_test_layer::taxccr0 == expected_taxccr0);
 
+    uint16_t time_after_isr = next_taxr - timer_test_layer::taxccr0;
+    uint16_t time_step = next_taxr - timer_test_layer::taxr;
+    bool call_isr = time_step > time_after_isr;
+
     timer_test_layer::taxr = next_taxr;
 
-    if (timer_test_layer::taxccr0 <= next_taxr) {
+    if (call_isr) {
       timer_test_layer::isr();
     }
   };
@@ -394,6 +430,151 @@ TEST_CASE("timer_a resume multiple threads with overflow", "[msp430][timer]") {
       CHECK(timer_test_layer::taxccr0 == 65000);
       timer_test_layer::taxr = 65100;
       timer_test_layer::isr();
+    }
+  };
+
+  callback_scheduler::wakeup_next();
+  CHECK(callback_scheduler::complete());
+}
+
+TEST_CASE("timer_a reproduce issue", "[msp430][timer]") {
+  timer_test_layer::reset();
+  callback_scheduler::reset();
+
+  REQUIRE(test_timer::idle());
+
+  uint16_t expected_taxccr0;
+  uint16_t next_taxr;
+  callback_scheduler::on_suspend = [&]() {
+    // timer has to always run, when suspended
+    CHECK(timer_test_layer::running());
+
+    CHECK(timer_test_layer::taxccr0 == expected_taxccr0);
+
+    uint16_t time_after_isr = next_taxr - timer_test_layer::taxccr0;
+    uint16_t time_step = next_taxr - timer_test_layer::taxr;
+    bool call_isr = time_step > time_after_isr;
+
+    timer_test_layer::taxr = next_taxr;
+
+    if (call_isr) {
+      timer_test_layer::isr();
+    }
+  };
+
+  timer_test_layer::taxr = 45939;
+  callback_scheduler::threads.resize(2);
+
+  // Thread 0
+  callback_scheduler::threads[0].calls = {
+    [&]() {
+      CHECK(timer_test_layer::taxr == 45939);
+      expected_taxccr0 = 60939;
+      next_taxr = timer_test_layer::taxr + 8196; // = 54135
+      test_timer::sleep(15000);
+    },
+    [&]() { // after sleep
+      CHECK(timer_test_layer::taxr == 60939 + 1000);
+      CHECK(timer_test_layer::taxccr0 == 28599);
+      expected_taxccr0 = 11403;
+      next_taxr = expected_taxccr0 + 1500;
+      test_timer::sleep(15000);
+    },
+    [&]() { // after sleep
+      CHECK(timer_test_layer::taxr == 11403 + 1500);
+      CHECK(timer_test_layer::taxccr0 == 28599);
+      expected_taxccr0 = 27903;
+      next_taxr = expected_taxccr0 + 1000; // = 28903 => this should resume both sleeps
+      test_timer::sleep(15000);
+    },
+    [&]() { // after sleep
+      CHECK(timer_test_layer::taxr == 27903+1000);
+      CHECK(!callback_scheduler::is_blocked(1)); // both sleeps should be resumed
+      expected_taxccr0 = 43903;
+      test_timer::sleep(15000);
+    },
+    [&]() {
+      CHECK(timer_test_layer::taxr == 44403);
+      CHECK(timer_test_layer::taxccr0 == 3367);
+      expected_taxccr0 = 59403;
+      next_taxr = expected_taxccr0 + 1000;
+      test_timer::sleep(15000);
+    },
+    []() {
+      CHECK(timer_test_layer::taxr == 60403);
+    }
+  };
+
+  // Thread 1
+  callback_scheduler::threads[1].calls = {
+    [&]() {
+      CHECK(timer_test_layer::taxr == 54135);
+      CHECK(expected_taxccr0 == 60939); // keep old expected_taxccr0
+      next_taxr = expected_taxccr0 + 1000;
+      test_timer::sleep(40000);
+    },
+    [&]() { // after sleep
+      CHECK(timer_test_layer::taxr == 28903);
+      CHECK(timer_test_layer::taxccr0 == 43903);
+      CHECK(expected_taxccr0 == 43903);
+      next_taxr = expected_taxccr0 + 500;
+      test_timer::sleep(40000);
+    }
+  };
+
+  callback_scheduler::wakeup_next();
+  CHECK(callback_scheduler::complete());
+}
+
+TEST_CASE("timer_a sleep with maximal ticks and isr is called after expiration from a previous sleep", "[msp430][timer][!mayfail]") {
+  timer_test_layer::reset();
+  callback_scheduler::reset();
+
+  REQUIRE(test_timer::idle());
+
+  uint16_t expected_taxccr0;
+  uint16_t next_taxr;
+  callback_scheduler::on_suspend = [&]() {
+    // timer has to always run, when suspended
+    CHECK(timer_test_layer::running());
+
+    REQUIRE(timer_test_layer::taxccr0 == expected_taxccr0);
+
+    bool call_isr = next_taxr >= timer_test_layer::taxccr0 &&
+                    timer_test_layer::taxr <= timer_test_layer::taxccr0;
+
+    timer_test_layer::taxr = next_taxr;
+
+    if (call_isr) {
+      timer_test_layer::isr();
+    }
+  };
+
+  timer_test_layer::taxr = 0;
+  callback_scheduler::threads.resize(3);
+
+  // Thread 0
+  callback_scheduler::threads[0].calls = {
+    [&]() {
+      expected_taxccr0 = 0xffff;
+      next_taxr = 0xf000;
+      test_timer::sleep(0xffff);
+    },
+    []() { // after sleep
+      CHECK(timer_test_layer::taxr == 0x0400);
+    }
+  };
+
+  // Thread 1
+  callback_scheduler::threads[1].calls = {
+    [&]() {
+      REQUIRE(timer_test_layer::current_time() == 0xf000);
+      expected_taxccr0 = 0xfff0;
+      next_taxr = 0x0400;
+      test_timer::sleep(0x0ff0);
+    },
+    []() { // after sleep
+      CHECK(timer_test_layer::taxr == 0x0400);
     }
   };
 
