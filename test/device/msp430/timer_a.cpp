@@ -437,6 +437,76 @@ TEST_CASE("timer_a resume multiple threads with overflow", "[msp430][timer]") {
   CHECK(callback_scheduler::complete());
 }
 
+
+TEST_CASE("issue timer_a sleep slightly before and after an active timer expires", "[msp430][timer][!mayfail]") {
+  timer_test_layer::reset();
+  callback_scheduler::reset();
+
+  REQUIRE(test_timer::idle());
+
+  uint16_t expected_taxccr0;
+  uint16_t next_taxr;
+  callback_scheduler::on_suspend = [&]() {
+    // timer has to always run, when suspended
+    CHECK(timer_test_layer::running());
+
+    CHECK(timer_test_layer::taxccr0 == expected_taxccr0);
+
+    uint16_t time_after_isr = next_taxr - timer_test_layer::taxccr0;
+    uint16_t time_step = next_taxr - timer_test_layer::taxr;
+    bool call_isr = time_step > time_after_isr;
+
+    timer_test_layer::taxr = next_taxr;
+
+    if (call_isr) {
+      timer_test_layer::isr();
+    }
+  };
+
+  timer_test_layer::taxr = 10280;
+  callback_scheduler::threads.resize(2);
+
+  // Thread 0
+  callback_scheduler::threads[0].calls = {
+    [&]() {
+      CHECK(timer_test_layer::taxr == 10280);
+      expected_taxccr0 = 60280;
+      next_taxr = 60173; // slightly before this sleep expires
+      test_timer::sleep(50000);
+    },
+    [&]() {
+      CHECK(timer_test_layer::taxr == 60280 + 500);
+      CHECK(timer_test_layer::taxccr0 == 37637);
+      expected_taxccr0 = 52640;
+      next_taxr = 37700;
+      timer_test_layer::taxr = 37640; // slightly after the sleep from thread 1 expires
+      test_timer::sleep(15000);
+    },
+    []() {
+      CHECK(timer_test_layer::taxr == 52640+500);
+    }
+  };
+
+  // Thread 1
+  callback_scheduler::threads[1].calls = {
+    [&]() {
+      CHECK(timer_test_layer::taxr == 60173);
+      CHECK(expected_taxccr0 == 60280); // keep old expected_taxccr0
+      next_taxr = expected_taxccr0 + 500;
+      test_timer::sleep(43000);
+    },
+    [&]() { // after sleep
+      CHECK(timer_test_layer::taxr == 37700);
+      CHECK(timer_test_layer::taxccr0 == 52640);
+      timer_test_layer::taxr = 52640+500;
+      timer_test_layer::isr();
+    }
+  };
+
+  callback_scheduler::wakeup_next();
+  CHECK(callback_scheduler::complete());
+}
+
 TEST_CASE("timer_a reproduce issue", "[msp430][timer]") {
   timer_test_layer::reset();
   callback_scheduler::reset();
