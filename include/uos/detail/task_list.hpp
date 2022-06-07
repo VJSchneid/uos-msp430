@@ -11,6 +11,10 @@ struct task_list {
         task_t * volatile next;
     };
 
+    void clear() noexcept {
+        waiting_tasks_ = nullptr;
+    }
+
     // TODO variadic argument to create TaskData
     task_t create() {
         task_t my_task;

@@ -13,24 +13,20 @@ struct timer_a_base {
         // all fields that are accessed by ISR must
         // be marked volatile to prevent invalid content
 
-        // starting timepoint is used to check wether an interrupt was missed
-        // when configuring the next wakeup_time
-        volatile uint16_t starting_timepoint;
-        volatile uint16_t ticks;
+        volatile uint16_t wakeup_time;
 
-        inline uint16_t wakeup_time() noexcept {
-            return starting_timepoint + ticks;
-        }
-
-        inline bool is_expired(uint16_t time) noexcept {
-            uint16_t time_since_sp = time - starting_timepoint;
-            return time_since_sp >= ticks;
+        inline bool is_expired_in(uint16_t old_time, uint16_t new_time) noexcept {
+            //if (old_time == new_time) return true; // one complete clock turn
+            uint16_t time_step = new_time - old_time;
+            uint16_t time_after_trigger = new_time - wakeup_time;
+            return time_step > time_after_trigger;
         }
     };
 
     using task_list_t = task_list<task_data, Scheduler>;
     using task_t = task_list_t::task_t;
 
+#if false
     static task_t *find_next_ready_task(task_list_t &tl, uint16_t current_time) noexcept {
         if (tl.empty()) return nullptr;
 
@@ -48,12 +44,19 @@ struct timer_a_base {
         }
         return next_task;
     }
+#endif
 };
 
 template<typename HWLayer, typename Scheduler>
 struct timer_a : timer_a_base<Scheduler> {
     using base = timer_a_base<Scheduler>;
 
+    struct delay_t {
+        uint16_t reference_timepoint;
+        uint16_t ticks;
+    };
+
+#if false
     struct delay_t : private base::task_t {
         delay_t(unsigned ticks_from_now) noexcept : base::task_t(waiting_tasks_.create()) {
             base::task_t::starting_timepoint = HWLayer::current_time();
@@ -79,17 +82,104 @@ struct timer_a : timer_a_base<Scheduler> {
     static delay_t delay_from_now(unsigned ticks) noexcept {
         return delay_t(ticks);
     }
+#endif
 
-    static void sleep(unsigned ticks) noexcept {
-        if (ticks <= 0) return;
-
-        auto my_task = delay_from_now(ticks);
-
-        sleep(my_task);
+    static void init() noexcept {
+        last_taxr_ = HWLayer::current_time();
     }
 
+    /**
+     * suspends the current execution until the time
+     * specified in `delay` was reached
+     * 
+     * @warning no more than 0xffff ticks have to be elapsed
+     *          since creation of delay or its last sleep
+     * 
+     * @note    maximal delay is 0xffff
+     */
+    static void sleep(delay_t delay) noexcept {
+        // TODO
+    }
+
+    /**
+     * suspends the current execution for at least `ticks` ticks
+     */
+    static void sleep(uint16_t ticks) noexcept {
+        if (ticks <= 0) return;
+
+        auto reference_time = HWLayer::current_time();
+
+        auto task = waiting_tasks_.create();
+        task.wakeup_time = reference_time + ticks;
+
+
+        sleep_since_ref(task, reference_time);
+        waiting_tasks_.remove(task);
+    }
+
+    static bool idle() noexcept {
+        return waiting_tasks_.empty();
+    }
+
+private:
+    friend HWLayer;
+
     // TODO: test me!
-    static void sleep(delay_t &my_task) noexcept {
+    static void sleep_since_ref(base::task_t &task, uint16_t reference_time) noexcept {
+        Scheduler::prepare_suspend();
+
+        // stop timer before updating TAxCCRx
+        // as recommended in Family User Guide (section 13.2.4.2)
+        HWLayer::stop_timer();
+
+        auto time = HWLayer::current_time();
+
+        // when stopping the timer an interrupt might be missed
+        // so it is necessary to check if any old task expired
+        uint16_t min_ticks_until_trigger = 0xffff;
+        uint16_t next_wakeup_time = time-1;
+        for (auto &old_task : waiting_tasks_) {
+            // TODO: last_taxr -> time might be longer than 0xffff cycles (MAYFAIL)
+            if (old_task.is_expired_in(last_taxr_, time)) {
+                Scheduler::unblock(old_task.nr);
+            } else {
+                uint16_t ticks_until_trigger = old_task.wakeup_time - time;
+                if (min_ticks_until_trigger > ticks_until_trigger) {
+                    next_wakeup_time = old_task.wakeup_time;
+                    min_ticks_until_trigger = ticks_until_trigger;
+                }
+            }
+        }
+
+        waiting_tasks_.prepend(task);
+
+        bool suspend = true;
+        // check if task is not expired already
+        if (!task.is_expired_in(reference_time, time)) {
+            
+            uint16_t ticks_until_trigger = task.wakeup_time - time;
+            if (min_ticks_until_trigger > ticks_until_trigger) {
+                next_wakeup_time = task.wakeup_time;
+                min_ticks_until_trigger = ticks_until_trigger;
+            }
+        } else {
+            suspend = false;
+        }
+
+        last_taxr_ = time;
+        HWLayer::wakeup_time(next_wakeup_time);
+
+        HWLayer::enable_timer();
+
+        if (suspend) {
+            Scheduler::suspend_me();
+        }
+
+        waiting_tasks_.remove(task);
+
+        maybe_stop_timer();
+
+#if false
         // prepare suspend (i.e. reset block ctr to zero)
         Scheduler::prepare_suspend();
 
@@ -99,6 +189,7 @@ struct timer_a : timer_a_base<Scheduler> {
         // as recommended in Family User Guide (section 13.2.4.2)
         HWLayer::stop_timer();
         auto time = HWLayer::current_time();
+
         // check that sleep timepoint is in future
         if (!my_task.is_expired(time)) {
             // check if currently set wakeup_time has to wait longer as this delay
@@ -120,16 +211,35 @@ struct timer_a : timer_a_base<Scheduler> {
         if (suspend) {
             Scheduler::suspend_me();
         }
+#endif
     }
-
-    static bool idle() noexcept {
-        return waiting_tasks_.empty();
-    }
-
-private:
-    friend HWLayer;
 
     static inline void __attribute__((always_inline)) handle_isr() noexcept {
+        HWLayer::stop_timer();
+
+        uint16_t time = HWLayer::current_time();
+
+        uint16_t min_ticks_until_trigger = 0xffff;
+        uint16_t next_wakeup_time = time-1;
+        for (auto &old_task : waiting_tasks_) {
+            // TODO: last_taxr -> time might be longer than 0xffff cycles (MAYFAIL)
+            if (old_task.is_expired_in(last_taxr_, time)) { // TODO: maybe we should check two ranges: last_taxr_ -> wakeup_time and wakeup_time -> time
+                Scheduler::unblock(old_task.nr);
+            } else {
+                uint16_t ticks_until_trigger = old_task.wakeup_time - time;
+                if (min_ticks_until_trigger > ticks_until_trigger) {
+                    next_wakeup_time = old_task.wakeup_time;
+                    min_ticks_until_trigger = ticks_until_trigger;
+                }
+            }
+        }
+
+        last_taxr_ = time;
+        HWLayer::wakeup_time(next_wakeup_time);
+
+        HWLayer::enable_timer();
+
+#if false
         for (auto &task : waiting_tasks_) {
             // unblock all tasks which expired
             if (HWLayer::wakeup_time() == task.wakeup_time()) {
@@ -137,17 +247,17 @@ private:
             }
         }
 
+        // stop timer before updating TAxCCRx
+        // as recommended in Family User Guide (section 13.2.4.2)
+        HWLayer::stop_timer();
+        auto time = HWLayer::current_time();
         for (auto next_task = base::find_next_ready_task(waiting_tasks_, HWLayer::wakeup_time());
             next_task != nullptr;
-            next_task = base::find_next_ready_task(waiting_tasks_, HWLayer::wakeup_time())) {
-            
-            // stop timer before updating TAxCCRx
-            // as recommended in Family User Guide (section 13.2.4.2)
-            HWLayer::stop_timer();
-            HWLayer::wakeup_time(next_task->wakeup_time());
+            next_task = base::find_next_ready_task(waiting_tasks_, next_task->wakeup_time())) { // TODO miss multiple overunned wakeups 
 
             // check if delay is not expired
-            if (!next_task->is_expired(HWLayer::current_time())) {
+            if (!next_task->is_expired(time)) {
+                HWLayer::wakeup_time(next_task->wakeup_time());
                 break; // did not miss interrupt :)
             }
 
@@ -156,19 +266,24 @@ private:
             // TODO: rename unblock to resume
         }
         HWLayer::enable_timer();
+#endif
     }
 
-    static void check_stop() noexcept {
+    static void maybe_stop_timer() noexcept {
         if (waiting_tasks_.empty()) {
-            HWLayer::stop_timer(); // work is done: stop timer
+            HWLayer::stop_timer();
         }
     }
 
+    static uint16_t last_taxr_;
     static base::task_list_t waiting_tasks_;
 };
 
 template<typename HWLayer, typename Scheduler>
 typename timer_a_base<Scheduler>::task_list_t timer_a<HWLayer, Scheduler>::waiting_tasks_;
+
+template<typename HWLayer, typename Scheduler>
+uint16_t timer_a<HWLayer, Scheduler>::last_taxr_ = 0;
 
 #ifdef UOS_DEV_MSP430_ENABLE_TIMERA0
 struct timer_a0_layer {
@@ -186,7 +301,7 @@ struct timer_a0_layer {
 
     static inline void enable_timer() noexcept {
         TA0CCTL0 = CCIE;
-        TA0CTL = TASSEL__SMCLK | ID__2 | MC__CONTINUOUS;
+        TA0CTL = TASSEL__SMCLK | ID__1 | MC__CONTINUOUS;
     }
 
     static inline void stop_timer() noexcept {
