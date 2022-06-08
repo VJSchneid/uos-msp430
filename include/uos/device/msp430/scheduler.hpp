@@ -1,6 +1,8 @@
 #pragma once
 
-#include <uos/scheduler.hpp>
+#include <uos/basic_scheduler.hpp>
+
+#ifdef UOS_ARCH_MSP430
 
 #include <msp430.h>
 
@@ -22,8 +24,16 @@ struct scheduler_layer {
 
   static void thread_init(void **new_sp, void (*initial_function)()) noexcept;
 
+  static void enable_interrupts() noexcept {
+    __bis_SR_register(GIE);
+  }
+
+  static void disable_interrupts() noexcept {
+    __bic_SR_register(GIE);
+  }
+
   static void sleep_until_interrupt() noexcept {
-    __bis_SR_register(LPM0_bits);
+    __bis_SR_register(GIE | LPM0_bits);
   }
 };
 
@@ -32,3 +42,5 @@ struct scheduler_layer {
 using scheduler = basic_scheduler<dev::msp430::scheduler_layer>;
 
 }
+
+#endif

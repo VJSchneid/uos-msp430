@@ -1,18 +1,22 @@
 #pragma once
 
-#include <uos/device/msp430/task_list.hpp>
+#include <uos/detail/task_list.hpp>
+#include <uos/device/msp430/scheduler.hpp>
 
 namespace uos::dev::msp430 {
 
+template<typename Scheduler>
 struct usci_base {
+
     struct task_data {
         const char * volatile data;
         volatile unsigned length;
     };
 
-    using task_t = task_list<task_data>::task_t;
+    using task_list_t = task_list<task_data, Scheduler>;
+    using task_t = task_list_t::task_t;
 
-    static inline task_t *get_active_task(task_list<task_data> &tl) {
+    static inline task_t *get_active_task(task_list_t &tl) {
         task_t *last_task_with_data = nullptr;
         for (auto &task : tl) {
             if (task.length > 0) {
@@ -27,13 +31,14 @@ struct usci_base {
     }
 };
 
-template<typename HWLayer>
-struct eusci : usci_base {
+template<typename HWLayer, typename Scheduler>
+struct eusci : usci_base<Scheduler> {
+    using base = usci_base<Scheduler>;
 
     static void transmit(const char *data, unsigned length) {
         // TODO power save and maybe reset with UCSWRST?
         if (length == 0) return;
-        scheduler::prepare_suspend();
+        Scheduler::prepare_suspend();
 
         auto my_task = waiting_tx_tasks_.create();
         my_task.data = data;
@@ -47,12 +52,16 @@ struct eusci : usci_base {
         }
         HWLayer::enable_tx_interrupt();
 
-        scheduler::suspend_me();
+        Scheduler::suspend_me();
 
         waiting_tx_tasks_.remove(my_task);
     }
 
-    //void transmit(const char *str);
+    static void transmit_str(const char *str) {
+        int size;
+        for (size = 0; str[size] != 0; size++);
+        transmit(str, size);
+    }
 
     template<unsigned length>
     static void transmit(const char(&str)[length]) {
@@ -62,11 +71,12 @@ struct eusci : usci_base {
 
 private:
     friend HWLayer;
-    static task_list<task_data> waiting_tx_tasks_;
+    static base::task_list_t waiting_tx_tasks_;
 };
 
-template<typename HWLayer>
-task_list<usci_base::task_data> eusci<HWLayer>::waiting_tx_tasks_;
+template<typename HWLayer, typename Scheduler>
+typename usci_base<Scheduler>::task_list_t 
+    eusci<HWLayer, Scheduler>::waiting_tx_tasks_;
 
 #ifdef UOS_DEV_MSP430_ENABLE_EUSCIA1
 struct eusci_a1_layer {
@@ -92,7 +102,8 @@ struct eusci_a1_layer {
 
     static void __attribute__((interrupt(USCI_A1_VECTOR))) isr();
 };
-using eusci_a1 = eusci<eusci_a1_layer>;
+
+using eusci_a1 = eusci<eusci_a1_layer, scheduler>;
 #endif
 
 #ifdef UOS_DEV_MSP430_ENABLE_EUSCIB0
@@ -119,7 +130,8 @@ struct eusci_b0_layer {
 
     static void __attribute__((interrupt(USCI_B0_VECTOR))) isr();
 };
-using eusci_b0 = eusci<eusci_b0_layer>;
+
+using eusci_b0 = eusci<eusci_b0_layer, scheduler>;
 #endif
 
 }

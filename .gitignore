@@ -1,6 +1,9 @@
 # ignore build files
 build/
 
+# ignore vscode settings
+.vscode/settings.json
+
 # CMake specific files
 CMakeLists.txt.user
 

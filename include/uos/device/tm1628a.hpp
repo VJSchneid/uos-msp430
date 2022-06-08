@@ -1,6 +1,6 @@
 #pragma once
 
-#include <uos/autoselect.hpp>
+#include <uos/detail/autoselect.hpp>
 
 namespace uos::dev {
 
