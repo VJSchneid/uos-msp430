@@ -5,51 +5,6 @@
 
 using namespace uos::dev::msp430;
 
-#if false
-static void add_task(timer_a_base<callback_scheduler>::task_list_t &tl,
-              std::vector<timer_a_base<callback_scheduler>::task_t> &vec,
-              unsigned starting_point,
-              unsigned ticks) {
-  
-  auto &td = vec.emplace_back(tl.create());
-  td.starting_timepoint = starting_point;
-  td.ticks = ticks;
-  tl.prepend(td);
-}
-
-TEST_CASE("check if sleep task is expired", "[msp430][timer]") {
-  using task = timer_a_base<callback_scheduler>::task_data;
-
-  task t;
-  t.starting_timepoint = 0x1000;
-  t.ticks = 0x1000;
-  CHECK(t.is_expired(0x0000));
-  CHECK(t.is_expired(0x00ff));
-  CHECK(not t.is_expired(0x1000));
-  CHECK(not t.is_expired(0x1fff));
-  CHECK(t.is_expired(0x2000));
-  CHECK(t.is_expired(0x4000));
-  CHECK(t.is_expired(0xffff));
-}
-
-TEST_CASE("check if sleep task is expired with overflow", "[msp430][timer]") {
-  using task = timer_a_base<callback_scheduler>::task_data;
-
-  task t;
-  t.starting_timepoint = 60000;
-  t.ticks = 50000;
-
-  CHECK(t.is_expired(59999));
-  CHECK(not t.is_expired(60000));
-  CHECK(not t.is_expired(0xffff));
-  CHECK(not t.is_expired(0));
-  CHECK(not t.is_expired(20000));
-  CHECK(not t.is_expired(44463));
-  CHECK(t.is_expired(44464));
-  CHECK(t.is_expired(50000));
-}
-#endif
-
 TEST_CASE("timer_a task: is_expired_in", "[msp430][timer]") {
   using task = timer_a_base<callback_scheduler>::task_data;
 
@@ -105,71 +60,6 @@ TEST_CASE("timer_a task: is_expired_in", "[msp430][timer]") {
   t.wakeup_time = 19628;
   CHECK(t.is_expired_in(19557, 19663));
 }
-
-#if false
-TEST_CASE("find_next_ready_task for timer_a using common values", "[msp430][timer]") {
-  using timer = timer_a_base<callback_scheduler>;
-
-  std::vector<timer_a_base<callback_scheduler>::task_t> tasks_;
-  // reserve enough space to prevent reallocation
-  tasks_.reserve(10);
-
-  // create task_list first
-  timer::task_list_t tl;
-  CHECK(timer::find_next_ready_task(tl, 0) == nullptr);
-
-  add_task(tl, tasks_, 100, 100);
-  add_task(tl, tasks_, 100, 50);
-
-  CHECK(timer::find_next_ready_task(tl, 0) == nullptr);
-  CHECK(timer::find_next_ready_task(tl, 99) == nullptr);
-  CHECK(timer::find_next_ready_task(tl, 100) == &tasks_[1]);
-  CHECK(timer::find_next_ready_task(tl, 149) == &tasks_[1]);
-  CHECK(timer::find_next_ready_task(tl, 150) == &tasks_[0]);
-  CHECK(timer::find_next_ready_task(tl, 199) == &tasks_[0]);
-  CHECK(timer::find_next_ready_task(tl, 200) == nullptr);
-}
-
-TEST_CASE("find_next_ready_task for timer_a with zero ticks", "[msp430][timer]") {
-  using timer = timer_a_base<callback_scheduler>;
-
-  std::vector<timer_a_base<callback_scheduler>::task_t> tasks_;
-  // reserve enough space to prevent reallocation
-  tasks_.reserve(10);
-
-  timer::task_list_t tl;
-  add_task(tl, tasks_, 0, 0);
-  add_task(tl, tasks_, 1, 0);
-
-  CHECK(timer::find_next_ready_task(tl, 0) == nullptr);
-  CHECK(timer::find_next_ready_task(tl, 1) == nullptr);
-  CHECK(timer::find_next_ready_task(tl, 2) == nullptr);
-}
-
-TEST_CASE("find_next_ready_task for timer_a with maximal values", "[msp430][timer]") {
-  using timer = timer_a_base<callback_scheduler>;
-
-  std::vector<timer_a_base<callback_scheduler>::task_t> tasks_;
-  // reserve enough space to prevent reallocation
-  tasks_.reserve(10);
-
-  timer::task_list_t tl;
-  add_task(tl, tasks_, 0, 0xffff);
-  add_task(tl, tasks_, 1, 0xffff);
-
-  CHECK(timer::find_next_ready_task(tl, 0) == &tasks_[0]);
-  CHECK(timer::find_next_ready_task(tl, 1) == &tasks_[0]);
-  CHECK(timer::find_next_ready_task(tl, 0xfffe) == &tasks_[0]);
-  CHECK(timer::find_next_ready_task(tl, 0xffff) == &tasks_[1]);
-  CHECK(timer::find_next_ready_task(tl, 0xffff) == &tasks_[1]);
-
-  add_task(tl, tasks_, 0xffff, 10);
-  CHECK(timer::find_next_ready_task(tl, 0xfffe) == &tasks_[0]);
-  CHECK(timer::find_next_ready_task(tl, 0xffff) == &tasks_[1]);
-  CHECK(timer::find_next_ready_task(tl, 0)      == &tasks_[2]);
-  CHECK(timer::find_next_ready_task(tl, 10)     == &tasks_[0]);
-}
-#endif
 
 struct timer_test_layer {
   static uint16_t wakeup_time() noexcept {
