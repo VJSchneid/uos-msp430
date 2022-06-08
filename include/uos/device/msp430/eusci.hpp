@@ -57,7 +57,11 @@ struct eusci : usci_base<Scheduler> {
         waiting_tx_tasks_.remove(my_task);
     }
 
-    //void transmit(const char *str);
+    static void transmit_str(const char *str) {
+        int size;
+        for (size = 0; str[size] != 0; size++);
+        transmit(str, size);
+    }
 
     template<unsigned length>
     static void transmit(const char(&str)[length]) {
