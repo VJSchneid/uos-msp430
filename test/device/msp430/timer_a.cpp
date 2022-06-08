@@ -92,9 +92,18 @@ TEST_CASE("timer_a task: is_expired_in", "[msp430][timer]") {
   CHECK(t.is_expired_in(0xffff, 0xfffe));
   CHECK(not t.is_expired_in(0xffff, 0xffff)); // do not interpret this as a complete clock turn
 
-  t.wakeup_time = 51800;
-  CHECK(not t.is_expired_in(2000, 2100));
-  CHECK(not t.is_expired_in(1700, 2300));
+  t.wakeup_time = 55892;
+  CHECK(not t.is_expired_in(3146, 5892));
+  CHECK(not t.is_expired_in(5892, 6309));
+  CHECK(not t.is_expired_in(5892, 30000));
+  CHECK(not t.is_expired_in(5892, 55891));
+  CHECK(not t.is_expired_in(0xffff, 55891));
+  CHECK(not t.is_expired_in(55896, 55891));
+  CHECK(t.is_expired_in(55896, 55892));
+  CHECK(t.is_expired_in(5892, 55892));
+
+  t.wakeup_time = 19628;
+  CHECK(t.is_expired_in(19557, 19663));
 }
 
 #if false

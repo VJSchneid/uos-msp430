@@ -107,7 +107,7 @@ struct timer_a : timer_a_base<Scheduler> {
     static void sleep(uint16_t ticks) noexcept {
         if (ticks <= 0) return;
 
-        auto reference_time = HWLayer::current_time();
+        uint16_t reference_time = HWLayer::current_time();
 
         auto task = waiting_tasks_.create();
         task.wakeup_time = reference_time + ticks;
@@ -132,7 +132,7 @@ private:
         // as recommended in Family User Guide (section 13.2.4.2)
         HWLayer::stop_timer();
 
-        auto time = HWLayer::current_time();
+        uint16_t time = HWLayer::current_time();
 
         // when stopping the timer an interrupt might be missed
         // so it is necessary to check if any old task expired
@@ -275,7 +275,7 @@ private:
         }
     }
 
-    static uint16_t last_taxr_;
+    static volatile uint16_t last_taxr_;
     static base::task_list_t waiting_tasks_;
 };
 
@@ -283,19 +283,19 @@ template<typename HWLayer, typename Scheduler>
 typename timer_a_base<Scheduler>::task_list_t timer_a<HWLayer, Scheduler>::waiting_tasks_;
 
 template<typename HWLayer, typename Scheduler>
-uint16_t timer_a<HWLayer, Scheduler>::last_taxr_ = 0;
+volatile uint16_t timer_a<HWLayer, Scheduler>::last_taxr_ = 0;
 
 #ifdef UOS_DEV_MSP430_ENABLE_TIMERA0
 struct timer_a0_layer {
-    static inline unsigned wakeup_time() noexcept {
+    static inline uint16_t wakeup_time() noexcept {
         return TA0CCR0;
     }
 
-    static inline unsigned current_time() noexcept {
+    static inline uint16_t current_time() noexcept {
         return TA0R;
     }
 
-    static inline void wakeup_time(unsigned timestamp) noexcept {
+    static inline void wakeup_time(uint16_t timestamp) noexcept {
         TA0CCR0 = timestamp;
     }
 
