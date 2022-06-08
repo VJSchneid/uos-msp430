@@ -36,8 +36,10 @@ struct basic_scheduler {
         int my_tasknr = active_task_;
         tasks_[my_tasknr].blocked = tasks_[my_tasknr].blocked + 1;
         while (true) {
+            MCULayer::disable_interrupts();
             for (unsigned i = 0; i < UOS_NUMBER_OF_TASKS; i++) {
                 if (tasks_[i].sp != nullptr && tasks_[i].blocked <= 0) {
+                    MCULayer::enable_interrupts();
                     if (i != active_task_) {
                         active_task_ = i;
                         // TODO this should be protected? (interrupt disable?)

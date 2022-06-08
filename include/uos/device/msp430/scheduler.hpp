@@ -24,8 +24,16 @@ struct scheduler_layer {
 
   static void thread_init(void **new_sp, void (*initial_function)()) noexcept;
 
+  static void enable_interrupts() noexcept {
+    __bis_SR_register(GIE);
+  }
+
+  static void disable_interrupts() noexcept {
+    __bic_SR_register(GIE);
+  }
+
   static void sleep_until_interrupt() noexcept {
-    __bis_SR_register(LPM0_bits);
+    __bis_SR_register(GIE | LPM0_bits);
   }
 };
 

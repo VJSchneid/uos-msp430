@@ -4,6 +4,7 @@ find_package(Catch2 REQUIRED)
 
 add_executable(uos_test
   main.cpp
+  basic_scheduler.cpp
 )
 
 add_subdirectory(detail)
