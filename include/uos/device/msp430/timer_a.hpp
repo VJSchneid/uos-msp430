@@ -301,7 +301,7 @@ struct timer_a0_layer {
 
     static inline void enable_timer() noexcept {
         TA0CCTL0 = CCIE;
-        TA0CTL = TASSEL__SMCLK | ID__1 | MC__CONTINUOUS;
+        TA0CTL = TASSEL__ACLK | ID__8 | MC__CONTINUOUS;
     }
 
     static inline void stop_timer() noexcept {

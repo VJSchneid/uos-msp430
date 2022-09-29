@@ -17,6 +17,7 @@ if(${CMAKE_SYSTEM_PROCESSOR} STREQUAL "msp430")
 
   target_compile_definitions(config INTERFACE
     UOS_NUMBER_OF_TASKS=3
+    UOS_DEV_MSP430_ENABLE_PORT1
     UOS_DEV_MSP430_ENABLE_PORT2
     UOS_DEV_MSP430_ENABLE_TIMERA0
     UOS_DEV_MSP430_ENABLE_EUSCIA1
@@ -29,6 +30,8 @@ add_subdirectory(src)
 # build tests when not cross compiling
 if(NOT ${CMAKE_CROSSCOMPILING})
   add_subdirectory(test)
+else()
+  add_subdirectory(example)
 endif()
 
 
