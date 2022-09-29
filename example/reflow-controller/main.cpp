@@ -5,10 +5,12 @@
 #include <uos/device/msp430/eusci.hpp>
 #include <uos/device/tm1628a.hpp>
 
-unsigned char stack2[512];
-unsigned char stack3[512];
-void *sp2 = &stack2[512];
-void *sp3 = &stack3[512];
+#include <random>
+
+unsigned char stack2[1024];
+unsigned char stack3[1024];
+void *sp2 = &stack2[1024];
+void *sp3 = &stack3[1024];
 void *sp1;
 
 #include "old_spi.hpp"
@@ -143,38 +145,45 @@ void main1() {
 
     max6675_uca0 temp;
 
+    //uos::dev::msp430::eusci_a1::transmit();
     //uos::timer.sleep(5000); // wait a little bit for clock to become stable
-    /*uos::uca1.transmit("Starting Reflow Controller...\r\n");
-    uos::uca1.transmit("Version: " GIT_VERSION "\r\n");
-    uos::uca1.transmit("Build Date: " __DATE__ " " __TIME__ "\r\n");*/
+    uos::dev::msp430::eusci_a1::transmit("Starting Reflow Controller...\r\n");
+    uos::dev::msp430::eusci_a1::transmit("Version: " GIT_VERSION "\r\n");
+    uos::dev::msp430::eusci_a1::transmit("Build Date: " __DATE__ " " __TIME__ "\r\n");
 
-    unsigned delay = 65500;
-    volatile unsigned t1 = TA0R;
-    auto timestamp = timer::delay_from_now(delay);
+    uint16_t delay = 50000;
+    volatile uint16_t t1 = TA0R;
+    //auto timestamp = timer::delay_from_now(delay);
     while (1) {
         auto t = temp.read();
 
         auto nachkomma = (((t >> 3) & 0x03) * 25 + 5) / 10;
 
+
         auto result = print_display((t >> 5) * 10 + nachkomma, 0);
+        (void)result;
 
         //print_display(result + ((t & 0x7) << 1), 1);
         P3OUT = P3OUT ^ BIT0;
 
         for (int i = 0; i < 4; i++) {
-            timer::sleep(timestamp);
+            t1 = TA0R;
+            timer::sleep(delay);
             auto t2 = TA0R;
-            volatile int diff = delay + t1 - t2;
-            if (!print_display(diff < 0 ? -diff : diff, 1)) {
+            volatile int diff = (t2 - (t1 + delay));
+            print_display(diff < 0 ? -diff/10 : diff/10, 1);
+
+            if (diff > 7000 || diff < -7000) {
                 print_display(-1, 1);
             }
             t1 = t2;
-            timestamp.refresh(delay);
+            //timestamp.refresh(delay);
 
         }
     }
 }
 
+static uint16_t next_3_delay = 15000;
 
 void main2() {
 
@@ -186,9 +195,14 @@ void main2() {
     while (true) {
         P2IFG = 0; // only listen from now for keychanges (debounce)
         uos::dev::msp430::port2::wait_for_change(0b111);
-        uos::dev::msp430::eusci_a1::transmit("Button was pressed!\r\n");
-        brightness++;
-        segment_driver::display_control(brightness, true);
+        uos::dev::msp430::eusci_a1::transmit_str("Hello World!\n\r");
+        //print_stacktrace();
+        if (P2IN & 0b100) {
+            next_3_delay += 2000;
+        } else if (P2IN & 0b010) {
+            brightness++;
+            segment_driver::display_control(brightness, true);
+        }
         P3OUT = P3OUT | BIT2;
         timer::sleep(5000);
         P3OUT = P3OUT & ~BIT2;
@@ -196,20 +210,25 @@ void main2() {
 }
 
 void main3() {
+    std::subtract_with_carry_engine<uint16_t,12,5,7> rng;
+
     unsigned char leds = 1;
     bool forwards = true;
     while(true) {
-        segment_driver::write(3, (leds >> 0) & 0b11 | (((leds >> 0) & 0b100) << 1));
+        segment_driver::write(3, ((leds >> 0) & 0b11) | (((leds >> 0) & 0b100) << 1));
         segment_driver::write(5, (leds >> 3) & 0b1);
-        segment_driver::write(1, (leds >> 4) & 0b11 | (((leds >> 4) & 0b100) << 1));
-        timer::sleep(15000);
+        segment_driver::write(1, ((leds >> 4) & 0b11) | (((leds >> 4) & 0b100) << 1));
+        //auto ctr = rng();
+        //sprintf(buf, "sleep %05u\n\r", ctr);
+        //uos::dev::msp430::eusci_a1::transmit_str(buf);
+        timer::sleep(next_3_delay);
 
         if (forwards) {
             leds <<= 1;
         } else {
             leds >>= 1;
         }
-        if (leds == 0x40 && forwards || leds == 1 && !forwards) {
+        if ((leds == 0x40 && forwards) || (leds == 1 && !forwards)) {
             forwards = !forwards;
         }
     }
@@ -229,10 +248,10 @@ int main() {
     UCA1CTLW0 = UCSWRST;
     UCA1CTLW0 = UCA1CTLW0 | UCSSEL__SMCLK;
     UCA1IFG = 0; // reset all interrupt flags
-    // baudrate = 19200
-    UCA1BRW = 3; 
-    UCA1MCTLW_H = 0x2;
-    UCA1MCTLW_L = UCOS16 | (4 << 4);
+    // baudrate = 115200
+    UCA1BRW = 9; 
+    UCA1MCTLW_H = 0x08; // UCBRSx
+    UCA1MCTLW_L = 0 | (0 << 4); // UCOS16 | UCBRFx
     // enable USCI1
     UCA1CTLW0 = UCA1CTLW0 & ~UCSWRST;
 
