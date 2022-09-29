@@ -7,5 +7,5 @@ target_link_libraries(uos_device_gpio PUBLIC config)
 add_library(uos_device_eusci OBJECT eusci.cpp)
 target_link_libraries(uos_device_eusci PUBLIC config)
 
-add_library(uos_device_timer_a OBJECT timer_a.cpp)
-target_link_libraries(uos_device_timer_a PUBLIC config)
+add_library(uos_device_timer_a0 OBJECT timer_a0.cpp)
+target_link_libraries(uos_device_timer_a0 PUBLIC config)

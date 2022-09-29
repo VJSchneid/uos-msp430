@@ -1,6 +1,6 @@
 #include <msp430.h>
 
-#include <uos/device/msp430/timer_a.hpp>
+#include <uos/device/msp430/timer_a0.hpp>
 #include <uos/device/msp430/gpio.hpp>
 #include <uos/device/msp430/eusci.hpp>
 #include <uos/device/tm1628a.hpp>
