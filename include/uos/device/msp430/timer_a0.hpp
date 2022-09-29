@@ -19,7 +19,25 @@ struct timer_a0_hal {
 
     static inline void enable_timer() noexcept {
         TA0CCTL0 = CCIE;
-        TA0CTL = TASSEL__ACLK | ID__8 | MC__CONTINUOUS;
+        TA0CTL = TA0CTL | MC__CONTINUOUS;
+    }
+
+    enum class clock_source : uint16_t {
+      TAxCLK = TASSEL__TACLK,
+      ACLK = TASSEL__ACLK,
+      SMCLK = TASSEL__SMCLK,
+      INCLK = TASSEL__INCLK
+    };
+
+    enum class clock_divider : uint16_t {
+      div_1 = ID__1,
+      div_2 = ID__2,
+      div_4 = ID__4,
+      div_8 = ID__8
+    };
+
+    static inline void clock(clock_source clk_src, clock_divider div) noexcept {
+      TA0CTL = (TA0CTL & ~0x03C0) | static_cast<uint16_t>(clk_src) | static_cast<uint16_t>(div);
     }
 
     static inline void stop_timer() noexcept {

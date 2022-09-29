@@ -263,6 +263,8 @@ int main() {
 
     uos::scheduler::init();
 
+    timer::clock(timer::clock_source::SMCLK, timer::clock_divider::div_1);
+
     uos::scheduler::add_task(1, sp2, main2);
     uos::scheduler::add_task(2, sp3, main3);
 

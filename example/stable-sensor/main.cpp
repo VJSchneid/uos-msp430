@@ -411,6 +411,8 @@ int main() {
 
     uos::scheduler::init();
 
+    timer::clock(timer::clock_source::ACLK, timer::clock_divider::div_8);
+
     uos::scheduler::add_task(1, stack_main2+256, main2);
 
     main1();

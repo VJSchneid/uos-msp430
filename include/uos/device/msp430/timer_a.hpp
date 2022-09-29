@@ -48,7 +48,7 @@ struct timer_a_base {
 };
 
 template<typename HWLayer, typename Scheduler>
-struct timer_a : timer_a_base<Scheduler> {
+struct timer_a : timer_a_base<Scheduler>, HWLayer {
     using base = timer_a_base<Scheduler>;
 
     struct delay_t {
