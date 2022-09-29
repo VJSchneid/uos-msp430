@@ -248,7 +248,7 @@ enum send_cmd : uint8_t {
     sensor_update // 1 Byte Device No.
 };
 
-void format_buffer(unsigned char *buf, unsigned char id, uos::dev::measurement_data const &v, uint16_t battery_voltage) {
+void format_buffer(unsigned char *buf, unsigned char id, hdc::measurement_data const &v, uint16_t battery_voltage) {
     buf[0] = sensor_update;
     buf[1] = id;
     buf[2] = v.temperature >> 8;

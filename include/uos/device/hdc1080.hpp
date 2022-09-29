@@ -1,15 +1,19 @@
+#pragma once
+
 #include <stdint.h>
 
 namespace uos::dev {
 
-struct measurement_data {
-  uint16_t temperature;
-  uint16_t humidity;
+struct hdc1080_base {
+  struct measurement_data {
+    uint16_t temperature;
+    uint16_t humidity;
+  };
 };
 
 
 template<typename HAL>
-struct hdc1080 : HAL {
+struct hdc1080 : HAL, hdc1080_base {
   static void init() noexcept {
     HAL::init();
     unsigned char config_reg[] =  {0x10, 0x00};
