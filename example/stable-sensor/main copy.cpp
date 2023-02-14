@@ -1,87 +1,17 @@
 #include <msp430.h>
 
-#include <uos/device/msp430/timer_a0.hpp>
-#include <uos/device/msp430/gpio.hpp>
-#include <uos/device/cmt2300a.hpp>
-#include <uos/device/hdc1080.hpp>
-#include <uos/detail/autoselect.hpp>
-#include <uos/detail/buffer_sequence.hpp>
-#include <array>
+#include "../../include/uos/device/hdc1080.hpp"
 
-struct eusci_b_base {
+void write(unsigned char);
 
-    static void start_write() noexcept {
-        UCB0IFG   = UCB0IFG & ~UCTXIFG0; // clear UCTXIFG0
-        UCB0CTLW0 = UCB0CTLW0 | UCTR; // set transmit mode
-        UCB0CTLW0 = UCB0CTLW0 | UCTXSTT; // send START condition
+template<typename Buffers>
+void write_bufs(Buffers const& b) {
+    for (unsigned char v : b) {
+        write(b);
     }
+}
 
-    static inline bool write(unsigned char *data, unsigned length) noexcept {
-        for (unsigned x = 0; x < length; x++) {
-            while(~UCB0IFG & UCTXIFG0) { // wait for UCB0TXBUF to get transfered into shift register
-                if (UCB0IFG & UCNACKIFG) {
-                    return false;
-                }
-            }
-            UCB0TXBUF = data[x];
-        }
-        return true;
-    }
-
-    template<unsigned NrBufs>
-    static inline bool write_static(buffer_sequence<NrBufs> bufs) noexcept {
-        return bufs.apply([](unsigned char* data, unsigned length){
-            return write(data, length);
-        });
-    }
-
-    static bool stop_write() noexcept {
-        while(~UCB0IFG & UCTXIFG0) { // wait for UCB0TXBUF to get transfered into shift register
-            if (UCB0IFG & UCNACKIFG) {
-                return false;
-            }
-        }
-        UCB0CTLW0 = UCB0CTLW0 | UCTXSTP; // send STOP condition
-        while(UCB0CTLW0 & UCTXSTP); // wait for completion
-        return true;
-    }
-#if false
-    template<unsigned NrBufs>
-    static inline void write_static(buffer_sequence<NrBufs> bufs) noexcept {
-        UCB0IFG   = UCB0IFG & ~UCTXIFG0; // clear UCTXIFG0
-        UCB0CTLW0 = UCB0CTLW0 | UCTR; // set transmit mode
-        
-        bool ok = false;
-        while(!ok) {
-            UCB0CTLW0 = UCB0CTLW0 | UCTXSTT; // send START condition
-
-            ok = bufs.apply([](unsigned char* data, unsigned length){
-                for (unsigned x = 0; x < length; x++) {
-                    while(~UCB0IFG & UCTXIFG0) { // wait for UCB0TXBUF to get transfered into shift register
-                        if (UCB0IFG & UCNACKIFG) {
-                            return false;
-                        }
-                    }
-                    UCB0TXBUF = data[x];
-                }
-                return true;
-            });
-
-            while(~UCB0IFG & UCTXIFG0) { // wait for UCB0TXBUF to get transfered into shift register
-                if (UCB0IFG & UCNACKIFG) {
-                    ok = false;
-                    break;
-                }
-            }
-        }
-        
-        UCB0CTLW0 = UCB0CTLW0 | UCTXSTP; // send STOP condition
-        while(UCB0CTLW0 & UCTXSTP); // wait for completion   
-    }
-#endif
-};
-
-struct hdc1080_eusci_b : eusci_b_base {
+struct hdc1080_eusci_b {
   static inline void init() noexcept {
     P1SEL0 = BIT2 | BIT3;
     UCB0CTLW0 = UCB0CTLW0 | UCSWRST; // reset eUSCI_B
@@ -91,18 +21,6 @@ struct hdc1080_eusci_b : eusci_b_base {
     UCB0I2CSA = 0b1000000;
   }
 
-
-#if true
-  static inline void write(unsigned char address, unsigned char *data, unsigned char length) noexcept {
-    eusci_b_base::start_write();
-
-    //eusci_b_base::write_static(buffer_sequence<0>{}.add_buffer(&address,1).add_buffer(data,length));
-    eusci_b_base::write(&address, 1);
-    eusci_b_base::write(data, length);
-    eusci_b_base::stop_write();
-
-  }
-#else
   static inline void write(unsigned char address, unsigned char const *data, unsigned char length) noexcept {
     UCB0IFG   = UCB0IFG & ~UCTXIFG0; // clear UCTXIFG0
     UCB0CTLW0 = UCB0CTLW0 | UCTR; // set transmit mode
@@ -126,7 +44,7 @@ struct hdc1080_eusci_b : eusci_b_base {
     UCB0CTLW0 = UCB0CTLW0 | UCTXSTP; // send STOP condition
     while(UCB0CTLW0 & UCTXSTP); // wait for completion
   }
-#endif
+
   static inline void write(unsigned char address, unsigned char data) {
     write(address, &data, 1);
   }

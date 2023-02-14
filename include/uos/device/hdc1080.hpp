@@ -11,13 +11,14 @@ struct hdc1080_base {
   };
 };
 
-
 template<typename HAL>
 struct hdc1080 : HAL, hdc1080_base {
   static void init() noexcept {
     HAL::init();
-    unsigned char config_reg[] =  {0x10, 0x00};
-    HAL::write(0x02, config_reg, 2); // configure acquisition parameters
+    // TODO make this uniform for calls to HAL::write(unsigned char*, unsigned);
+    // maybe split HAL::write internally to HAL::write_epilog() HAL::write_mid(buffer) HAL::write_prolog()
+    unsigned char buffer[2] = {0x10, 0x00};
+    HAL::write(0x02, buffer, 2); // configure acquisition parameters
   }
 
   static void trigger_measurement() noexcept {
