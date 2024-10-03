@@ -5,8 +5,6 @@
 #include <uos/device/msp430/eusci.hpp>
 #include <uos/device/tm1628a.hpp>
 
-#include <random>
-
 unsigned char stack2[1024];
 unsigned char stack3[1024];
 void *sp2 = &stack2[1024];
@@ -75,6 +73,25 @@ struct tm1628a_ucb0_polling {
         }
     }
 };
+
+unsigned to_string(unsigned nr, char *str, int base = 10) {
+    unsigned i = 0;
+    do {
+        auto div = nr / 10;
+        auto residual = nr - (div * 10);
+        str[i] = residual + (residual < 10 ? '0' : 'A');
+        nr = div;
+        i++;
+    } while(nr != 0);
+    
+    // reverse string
+    for (unsigned x = 0; x < i/2; x++) {
+        char tmp = str[x];
+        str[x] = str[i-1-x];
+        str[i-1-x] = tmp;
+    }
+    return i;
+}
 
 using tm1628a = uos::dev::tm1628a_base;
 using segment_driver = uos::dev::tm1628a<tm1628a_ucb0_polling>;
@@ -158,9 +175,15 @@ void main1() {
         auto t = temp.read();
 
         auto nachkomma = (((t >> 3) & 0x03) * 25 + 5) / 10;
+        auto temperature = (t >> 5) * 10 + nachkomma;
 
+        char buffer[10];
+        auto len = to_string(temperature, buffer);
+        buffer[len] = '\r';
+        buffer[len+1] = '\n';
+        uos::dev::msp430::eusci_a1::transmit(buffer, len+2);
 
-        auto result = print_display((t >> 5) * 10 + nachkomma, 0);
+        auto result = print_display(temperature, 0);
         (void)result;
 
         //print_display(result + ((t & 0x7) << 1), 1);
@@ -210,7 +233,6 @@ void main2() {
 }
 
 void main3() {
-    std::subtract_with_carry_engine<uint16_t,12,5,7> rng;
 
     unsigned char leds = 1;
     bool forwards = true;
@@ -264,6 +286,10 @@ int main() {
     uos::scheduler::init();
 
     timer::clock(timer::clock_source::SMCLK, timer::clock_divider::div_1);
+
+    for (int i = 0; i < 3; i++) {
+        timer::sleep(32000); // TODO wait for clock to be stable
+    }
 
     uos::scheduler::add_task(1, sp2, main2);
     uos::scheduler::add_task(2, sp3, main3);
