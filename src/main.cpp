@@ -169,7 +169,7 @@ void main1() {
                 print_display(-1, 1);
             }
             t1 = t2;
-            timestamp.refresh(delay);
+            timestamp.update(delay);
 
         }
     }
@@ -199,9 +199,9 @@ void main3() {
     unsigned char leds = 1;
     bool forwards = true;
     while(true) {
-        segment_driver::write(3, (leds >> 0) & 0b11 | (((leds >> 0) & 0b100) << 1));
+        segment_driver::write(3, ((leds >> 0) & 0b11) | (((leds >> 0) & 0b100) << 1));
         segment_driver::write(5, (leds >> 3) & 0b1);
-        segment_driver::write(1, (leds >> 4) & 0b11 | (((leds >> 4) & 0b100) << 1));
+        segment_driver::write(1, ((leds >> 4) & 0b11) | (((leds >> 4) & 0b100) << 1));
         timer::sleep(15000);
 
         if (forwards) {
@@ -209,7 +209,7 @@ void main3() {
         } else {
             leds >>= 1;
         }
-        if (leds == 0x40 && forwards || leds == 1 && !forwards) {
+        if ((leds == 0x40 && forwards) || (leds == 1 && !forwards)) {
             forwards = !forwards;
         }
     }

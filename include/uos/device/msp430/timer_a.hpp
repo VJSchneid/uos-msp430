@@ -54,6 +54,11 @@ struct timer_a : timer_a_base<Scheduler> {
     struct delay_t {
         uint16_t reference_timepoint;
         uint16_t ticks;
+
+        void update(uint16_t new_ticks) {
+            reference_timepoint += ticks;
+            ticks = new_ticks;
+        }
     };
 
 #if false
@@ -78,11 +83,14 @@ struct timer_a : timer_a_base<Scheduler> {
         }
         friend timer_a;
     };
+#endif
 
     static delay_t delay_from_now(unsigned ticks) noexcept {
-        return delay_t(ticks);
+        delay_t result;
+        result.reference_timepoint = HWLayer::current_time();
+        result.ticks = ticks;
+        return result;
     }
-#endif
 
     static void init() noexcept {
         last_taxr_ = HWLayer::current_time();
@@ -98,7 +106,10 @@ struct timer_a : timer_a_base<Scheduler> {
      * @note    maximal delay is 0xffff
      */
     static void sleep(delay_t delay) noexcept {
-        // TODO
+        auto task = waiting_tasks_.create();
+        task.wakeup_time = delay.reference_timepoint + delay.ticks;
+        sleep_since_ref(task, delay.reference_timepoint);
+        waiting_tasks_.remove(task);
     }
 
     /**
@@ -134,8 +145,8 @@ private:
 
         uint16_t time = HWLayer::current_time();
 
-        // when stopping the timer an interrupt might be missed
-        // so it is necessary to check if any old task expired
+        // When stopping the timer an interrupt might be missed
+        // Therefore, it is necessary to check if any old task expired
         uint16_t min_ticks_until_trigger = 0xffff;
         uint16_t next_wakeup_time = time-1;
         for (auto &old_task : waiting_tasks_) {
